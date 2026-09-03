@@ -58,6 +58,8 @@ export type {
   NewModelInstance,
   NewModelRecord,
   Pluralize,
+  PolymorphicBelongsToDefinition,
+  PolymorphicIdentifier,
   RelationshipDefinition,
   RelationshipOptions,
   RelationshipRegistry,

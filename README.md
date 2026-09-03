@@ -163,6 +163,28 @@ draft.save(); // associates the saved post with user
 const post = user.createPost({ title: "A different light" });
 ```
 
+Polymorphic belongs-to relationships use an explicit target tuple so their
+values remain a typed union:
+
+```ts
+const models = {
+  comment: model<{ body: string }>().extend({
+    commentable: belongsTo(["post", "photo"] as const),
+  }),
+  photo: model<{ url: string }>(),
+  post: model<{ title: string }>(),
+};
+
+comment.commentable = post; // Post | Photo | null
+comment.commentableId; // { type: "post" | "photo"; id: string } | null
+comment.createCommentable("photo", { url: "/horizon.jpg" });
+```
+
+The `{ type, id }` identifier is preserved by `RestSerializer`. Included
+polymorphic resources are sideloaded under the root for their concrete model.
+Polymorphic factory associations must be supplied as explicit model overrides,
+because `association()` cannot infer which target to create.
+
 Destroying a model automatically clears foreign keys and stored ID references
 from dependent models, preventing dangling relationships.
 

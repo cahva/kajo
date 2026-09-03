@@ -55,17 +55,17 @@ change before the first stable version.
 
 ## Models and relationships
 
-| Mirage capability                                                  | Kajo status   | Notes                                                                               |
-| ------------------------------------------------------------------ | ------------- | ----------------------------------------------------------------------------------- |
-| Typed `model()` definitions and schema collections                 | **Supported** | Runtime definitions are the source of relationship types.                           |
-| Persisted model `attrs`, `update`, `save`, `reload`, and `destroy` | **Supported** | Destroyed-model operations have explicit diagnostics.                               |
-| Collection `all`, `find`, `findBy`, `first`, `where`, and `create` | **Supported** | Results use typed models and iterable collections.                                  |
-| Unsaved models (`new`, `isNew`, `isSaved`)                         | **Supported** | Draft attributes and relationships are persisted when `save` or `update` is called. |
-| `findOrCreateBy` and `none` schema helpers                         | **Supported** | Helpers return typed models and collections.                                        |
-| `belongsTo` and `hasMany`                                          | **Supported** | Includes inverse discovery, explicit inverses, and synchronized foreign keys.       |
-| Relationship ID properties and association helpers                 | **Supported** | Includes typed setters and `new<Name>`/`create<Name>` helpers.                      |
-| Polymorphic relationships                                          | **Planned**   | Requires typed unions and serializer support.                                       |
-| Relationship-dependent deletion behavior                           | **Supported** | Destroy clears belongs-to and stored has-many references on dependent models.       |
+| Mirage capability                                                  | Kajo status   | Notes                                                                                         |
+| ------------------------------------------------------------------ | ------------- | --------------------------------------------------------------------------------------------- |
+| Typed `model()` definitions and schema collections                 | **Supported** | Runtime definitions are the source of relationship types.                                     |
+| Persisted model `attrs`, `update`, `save`, `reload`, and `destroy` | **Supported** | Destroyed-model operations have explicit diagnostics.                                         |
+| Collection `all`, `find`, `findBy`, `first`, `where`, and `create` | **Supported** | Results use typed models and iterable collections.                                            |
+| Unsaved models (`new`, `isNew`, `isSaved`)                         | **Supported** | Draft attributes and relationships are persisted when `save` or `update` is called.           |
+| `findOrCreateBy` and `none` schema helpers                         | **Supported** | Helpers return typed models and collections.                                                  |
+| `belongsTo` and `hasMany`                                          | **Supported** | Includes inverse discovery, explicit inverses, and synchronized foreign keys.                 |
+| Relationship ID properties and association helpers                 | **Supported** | Includes typed setters and `new<Name>`/`create<Name>` helpers.                                |
+| Polymorphic relationships                                          | **Partial**   | Typed `belongsTo` unions, IDs, inverses, and serialization; polymorphic `hasMany` is planned. |
+| Relationship-dependent deletion behavior                           | **Supported** | Destroy clears belongs-to and stored has-many references on dependent models.                 |
 
 ## Factories and data setup
 
@@ -120,9 +120,9 @@ These are behavioral inputs, not commitments to preserve Mirage internals.
 
 ## Prioritized compatibility work
 
-1. Add polymorphic relationships and their serializer behavior.
-2. Add selective fixture loading and finish factory dependency ordering.
-3. Add request normalization helpers and decide coalesced request behavior.
+1. Add selective fixture loading and finish factory dependency ordering.
+2. Add request normalization helpers and decide coalesced request behavior.
+3. Add polymorphic `hasMany` if issue research demonstrates a current use case.
 4. Expand the issue-driven regression suite before declaring a stable API.
 
 OpenAPI integration starts after this compatibility foundation is stable.

@@ -155,9 +155,17 @@ export class Serializer {
   ): Record<string, unknown> {
     const models = relationshipModels(value);
 
-    return relationship.kind === "belongsTo"
-      ? { [this.keyForForeignKey(relationshipName)]: models[0]?.id ?? null }
-      : { [this.keyForRelationshipIds(relationshipName)]: models.map(({ id }) => id) };
+    if (relationship.kind === "belongsTo") {
+      const model = models[0];
+      return {
+        [this.keyForForeignKey(relationshipName)]:
+          relationship.polymorphic === true && model
+            ? { id: model.id, type: model.modelName }
+            : (model?.id ?? null),
+      };
+    }
+
+    return { [this.keyForRelationshipIds(relationshipName)]: models.map(({ id }) => id) };
   }
 }
 
@@ -267,17 +275,15 @@ function serializeModel(
       continue;
     }
 
-    const root = serializer.keyForRelationship(relationship.modelName);
-    const sideload = sideloads.get(root) ?? {
-      models: new Map<string, SerializableModel>(),
-      root,
-    };
-
     for (const model of related) {
+      const root = serializer.keyForRelationship(model.modelName);
+      const sideload = sideloads.get(root) ?? {
+        models: new Map<string, SerializableModel>(),
+        root,
+      };
       sideload.models.set(`${model.modelName}:${model.id}`, model);
+      sideloads.set(root, sideload);
     }
-
-    sideloads.set(root, sideload);
   }
 
   visited.delete(identity);

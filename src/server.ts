@@ -306,6 +306,12 @@ export class Server<
         );
       }
 
+      if (relationship.polymorphic === true) {
+        throw new Error(
+          `Factory association "${modelName}.${relationshipName}" is polymorphic; pass an explicit model override instead.`,
+        );
+      }
+
       resolved[relationshipName] = this.create(
         relationship.modelName as keyof Models & string,
         ...value.traits,
