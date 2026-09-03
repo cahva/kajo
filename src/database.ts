@@ -10,7 +10,11 @@ export type InsertableRecord<RecordType extends object> = Omit<RecordType, "id">
 
 export type RecordQuery<RecordType extends object> = Partial<StoredRecord<RecordType>>;
 
-type TableRecord<Table extends readonly object[]> = Table[number];
+export type UpdateAttributes<RecordType extends object> = Partial<
+  Omit<StoredRecord<RecordType>, "id">
+>;
+
+export type TableRecord<Table extends readonly object[]> = Table[number];
 
 export type DatabaseCollections<Tables extends DatabaseData> = {
   readonly [Name in keyof Tables]: DatabaseCollection<TableRecord<Tables[Name]>>;
@@ -35,14 +39,14 @@ export interface DatabaseCollection<RecordType extends object> extends Iterable<
   insert(record: InsertableRecord<RecordType>): StoredRecord<RecordType>;
   insert(records: readonly InsertableRecord<RecordType>[]): StoredRecord<RecordType>[];
   remove(target?: number | string | RecordQuery<RecordType>): void;
-  update(attributes: Partial<StoredRecord<RecordType>>): StoredRecord<RecordType>[];
+  update(attributes: UpdateAttributes<RecordType>): StoredRecord<RecordType>[];
   update(
     id: number | string,
-    attributes: Partial<StoredRecord<RecordType>>,
+    attributes: UpdateAttributes<RecordType>,
   ): StoredRecord<RecordType> | null;
   update(
     query: RecordQuery<RecordType>,
-    attributes: Partial<StoredRecord<RecordType>>,
+    attributes: UpdateAttributes<RecordType>,
   ): StoredRecord<RecordType>[];
   where(query: RecordQuery<RecordType>): StoredRecord<RecordType>[];
 }
@@ -185,8 +189,8 @@ class DatabaseCollectionImpl<RecordType extends object> {
   }
 
   update(
-    target: number | string | RecordQuery<RecordType>,
-    attributes?: Partial<StoredRecord<RecordType>>,
+    target: number | string | RecordQuery<RecordType> | UpdateAttributes<RecordType>,
+    attributes?: UpdateAttributes<RecordType>,
   ): StoredRecord<RecordType> | StoredRecord<RecordType>[] | null {
     if (attributes === undefined) {
       if (typeof target !== "object") {
@@ -201,7 +205,7 @@ class DatabaseCollectionImpl<RecordType extends object> {
       return record ? Object.assign(record, attributes) : null;
     }
 
-    return this.#updateMany(this.where(target), attributes);
+    return this.#updateMany(this.where(target as RecordQuery<RecordType>), attributes);
   }
 
   where(query: RecordQuery<RecordType>): StoredRecord<RecordType>[] {
@@ -225,7 +229,7 @@ class DatabaseCollectionImpl<RecordType extends object> {
 
   #updateMany(
     records: StoredRecord<RecordType>[],
-    attributes: Partial<StoredRecord<RecordType>>,
+    attributes: UpdateAttributes<RecordType>,
   ): StoredRecord<RecordType>[] {
     for (const record of records) {
       Object.assign(record, attributes);

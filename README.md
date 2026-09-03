@@ -30,17 +30,25 @@ Kajo can register typed route handlers and intercept requests made with Fetch
 or XMLHttpRequest:
 
 ```ts
-import { createServer } from "@cahva/kajo";
+import { createServer, model } from "@cahva/kajo";
+
+interface Movie {
+  title: string;
+}
 
 const server = createServer({
-  fixtures: {
-    movies: [{ title: "Arrival" }],
+  models: {
+    movie: model<Movie>(),
   },
 
   routes() {
     this.namespace = "api";
 
-    this.get("/movies/:id", (schema, request) => schema.db.movies.find(request.params.id));
+    this.get("/movies/:id", (schema, request) => schema.movies.find(request.params.id));
+  },
+
+  seeds(server) {
+    server.schema.movies.create({ title: "Arrival" });
   },
 });
 
@@ -50,10 +58,11 @@ await response.json(); // { id: "1", title: "Arrival" }
 server.shutdown();
 ```
 
-Fixture types flow through `server.db` and the schema passed to route handlers.
-Collections assign string IDs and support `find`, `findBy`, `where`, `insert`,
-`firstOrCreate`, `update`, and `remove`. Use `loadData`, `emptyData`, and
-`dump` to manage the database as a whole.
+Model and fixture types flow through `server.db` and the schema passed to route
+handlers. Schema collections return model instances, while low-level database
+collections support `find`, `findBy`, `where`, `insert`, `firstOrCreate`,
+`update`, and `remove`. Use `loadData`, `emptyData`, and `dump` to manage the
+database as a whole.
 
 ## Principles
 

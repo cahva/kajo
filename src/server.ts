@@ -1,13 +1,20 @@
 import { createDatabase, type Database, type DatabaseData } from "./database.ts";
 import type {
+  JsonSerializable,
   JsonValue,
   KajoRequest,
   RouteHandler,
   RouteOptions,
   RouteResponder,
-  Schema,
 } from "./http.ts";
 import { interceptRequests, type NetworkInterceptor } from "./interceptor.ts";
+import {
+  createSchema,
+  type ModelRegistry,
+  type ModelTables,
+  pluralize,
+  type Schema,
+} from "./model.ts";
 import { joinPaths, Router } from "./router.ts";
 
 const HTTP_METHODS = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"] as const;
@@ -17,24 +24,35 @@ type HttpMethod = (typeof HTTP_METHODS)[number];
 /**
  * Configuration used to create a Kajo server.
  */
-export interface ServerOptions<Tables extends DatabaseData = DatabaseData> {
+type ServerTables<Fixtures extends DatabaseData, Models extends ModelRegistry> = Fixtures &
+  ModelTables<Models>;
+
+export interface ServerOptions<
+  Fixtures extends DatabaseData = DatabaseData,
+  Models extends ModelRegistry = {},
+> {
   /** Register the server's HTTP routes. */
-  readonly routes?: (this: Server<Tables>) => void;
+  readonly routes?: (this: Server<Fixtures, Models>) => void;
   /** Default response delay in milliseconds. */
   readonly timing?: number;
   /** Whether to intercept Fetch and XMLHttpRequest traffic. */
   readonly intercept?: boolean;
   /** Initial records, grouped by collection name. */
-  readonly fixtures?: Tables;
+  readonly fixtures?: Fixtures;
+  /** Model definitions, keyed by singular model name. */
+  readonly models?: Models;
   /** Initialize additional application data. */
-  readonly seeds?: (server: Server<Tables>) => void;
+  readonly seeds?: (server: Server<Fixtures, Models>) => void;
 }
 
 /**
  * An in-memory API server.
  */
-export class Server<Tables extends DatabaseData = DatabaseData> {
-  readonly #router = new Router<Tables>();
+export class Server<
+  Fixtures extends DatabaseData = DatabaseData,
+  Models extends ModelRegistry = {},
+> {
+  readonly #router = new Router<ServerTables<Fixtures, Models>>();
   #interceptor: NetworkInterceptor | undefined;
   #isRunning = true;
 
@@ -45,15 +63,24 @@ export class Server<Tables extends DatabaseData = DatabaseData> {
   timing: number;
 
   /** The server's typed in-memory database. */
-  readonly db: Database<Tables>;
+  readonly db: Database<ServerTables<Fixtures, Models>>;
 
   /** Data available to route handlers. */
-  readonly schema: Schema<Tables>;
+  readonly schema: Schema<ServerTables<Fixtures, Models>>;
 
-  constructor(options: Omit<ServerOptions<Tables>, "routes" | "seeds"> = {}) {
+  constructor(options: Omit<ServerOptions<Fixtures, Models>, "routes" | "seeds"> = {}) {
     this.timing = options.timing ?? 0;
-    this.db = createDatabase(options.fixtures);
-    this.schema = Object.freeze({ db: this.db });
+    this.db = createDatabase(options.fixtures) as Database<ServerTables<Fixtures, Models>>;
+
+    const modelNames: Record<string, string> = {};
+
+    for (const modelName of Object.keys(options.models ?? {})) {
+      const collectionName = pluralize(modelName);
+      this.db.createCollection(collectionName);
+      modelNames[collectionName] = modelName;
+    }
+
+    this.schema = createSchema(this.db, modelNames);
 
     if (options.intercept !== false) {
       this.#interceptor = interceptRequests((request) => this.handle(request));
@@ -96,42 +123,74 @@ export class Server<Tables extends DatabaseData = DatabaseData> {
     this.#isRunning = false;
   }
 
-  delete(path: string, responder: RouteResponder<Tables>, options: RouteOptions = {}): void {
+  delete(
+    path: string,
+    responder: RouteResponder<ServerTables<Fixtures, Models>>,
+    options: RouteOptions = {},
+  ): void {
     this.#register("DELETE", path, responder, options);
   }
 
-  del(path: string, responder: RouteResponder<Tables>, options: RouteOptions = {}): void {
+  del(
+    path: string,
+    responder: RouteResponder<ServerTables<Fixtures, Models>>,
+    options: RouteOptions = {},
+  ): void {
     this.delete(path, responder, options);
   }
 
-  get(path: string, responder: RouteResponder<Tables>, options: RouteOptions = {}): void {
+  get(
+    path: string,
+    responder: RouteResponder<ServerTables<Fixtures, Models>>,
+    options: RouteOptions = {},
+  ): void {
     this.#register("GET", path, responder, options);
   }
 
-  head(path: string, responder: RouteResponder<Tables>, options: RouteOptions = {}): void {
+  head(
+    path: string,
+    responder: RouteResponder<ServerTables<Fixtures, Models>>,
+    options: RouteOptions = {},
+  ): void {
     this.#register("HEAD", path, responder, options);
   }
 
-  options(path: string, responder: RouteResponder<Tables>, options: RouteOptions = {}): void {
+  options(
+    path: string,
+    responder: RouteResponder<ServerTables<Fixtures, Models>>,
+    options: RouteOptions = {},
+  ): void {
     this.#register("OPTIONS", path, responder, options);
   }
 
-  patch(path: string, responder: RouteResponder<Tables>, options: RouteOptions = {}): void {
+  patch(
+    path: string,
+    responder: RouteResponder<ServerTables<Fixtures, Models>>,
+    options: RouteOptions = {},
+  ): void {
     this.#register("PATCH", path, responder, options);
   }
 
-  post(path: string, responder: RouteResponder<Tables>, options: RouteOptions = {}): void {
+  post(
+    path: string,
+    responder: RouteResponder<ServerTables<Fixtures, Models>>,
+    options: RouteOptions = {},
+  ): void {
     this.#register("POST", path, responder, options);
   }
 
-  put(path: string, responder: RouteResponder<Tables>, options: RouteOptions = {}): void {
+  put(
+    path: string,
+    responder: RouteResponder<ServerTables<Fixtures, Models>>,
+    options: RouteOptions = {},
+  ): void {
     this.#register("PUT", path, responder, options);
   }
 
   #register(
     method: HttpMethod,
     path: string,
-    responder: RouteResponder<Tables>,
+    responder: RouteResponder<ServerTables<Fixtures, Models>>,
     options: RouteOptions,
   ): void {
     this.#router.add(method, joinPaths(this.namespace, path), responder, options);
@@ -141,12 +200,13 @@ export class Server<Tables extends DatabaseData = DatabaseData> {
 /**
  * Create and configure an in-memory API server.
  */
-export function createServer<Tables extends DatabaseData = DatabaseData>(
-  options: ServerOptions<Tables> = {},
-): Server<Tables> {
-  const server = new Server<Tables>({
+export function createServer<Fixtures extends DatabaseData = {}, Models extends ModelRegistry = {}>(
+  options: ServerOptions<Fixtures, Models> = {},
+): Server<Fixtures, Models> {
+  const server = new Server<Fixtures, Models>({
     fixtures: options.fixtures,
     intercept: options.intercept,
+    models: options.models,
     timing: options.timing,
   });
   options.routes?.call(server);
@@ -173,7 +233,7 @@ async function resolveResponder<Tables extends DatabaseData>(
   responder: RouteResponder<Tables>,
   request: KajoRequest,
   schema: Schema<Tables>,
-): Promise<JsonValue | Response | undefined> {
+): Promise<JsonSerializable | JsonValue | Response | undefined> {
   if (typeof responder === "function") {
     return (responder as RouteHandler<Tables>)(schema, request);
   }
@@ -181,7 +241,7 @@ async function resolveResponder<Tables extends DatabaseData>(
   return responder instanceof Response ? responder.clone() : responder;
 }
 
-function toResponse(result: JsonValue | Response | undefined): Response {
+function toResponse(result: JsonSerializable | JsonValue | Response | undefined): Response {
   if (result instanceof Response) {
     return result;
   }
@@ -190,7 +250,16 @@ function toResponse(result: JsonValue | Response | undefined): Response {
     return new Response(null, { status: 204 });
   }
 
-  return Response.json(result);
+  return Response.json(isJsonSerializable(result) ? result.toJSON() : result);
+}
+
+function isJsonSerializable(value: unknown): value is JsonSerializable {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "toJSON" in value &&
+    typeof value.toJSON === "function"
+  );
 }
 
 function delay(milliseconds: number): Promise<void> {

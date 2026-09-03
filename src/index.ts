@@ -14,15 +14,28 @@ export type {
   InsertableRecord,
   RecordQuery,
   StoredRecord,
+  TableRecord,
+  UpdateAttributes,
 } from "./database.ts";
 export type {
+  JsonSerializable,
   JsonValue,
   KajoRequest,
   RouteHandler,
   RouteOptions,
   RouteResponder,
   RouteResult,
-  Schema,
 } from "./http.ts";
+export { Collection, createSchema, model, ModelCollection } from "./model.ts";
+export type {
+  Model,
+  ModelAttributes,
+  ModelDefinition,
+  ModelInstance,
+  ModelRegistry,
+  ModelTables,
+  Pluralize,
+  Schema,
+} from "./model.ts";
 export { createServer, Server } from "./server.ts";
 export type { ServerOptions } from "./server.ts";

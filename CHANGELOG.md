@@ -19,5 +19,7 @@ and this project adheres to
 - Automatic Fetch and XMLHttpRequest interception with network passthrough.
 - Typed in-memory collections with fixtures, seeds, generated IDs, queries,
   mutations, and reset behavior.
+- Typed model definitions, schema collections, persisted model instances, and
+  automatic model response serialization.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD
