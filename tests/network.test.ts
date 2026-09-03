@@ -92,6 +92,7 @@ describe("intercepted request boundaries", () => {
     const entries: RequestLog[] = [];
     const server = createServer({
       logging: (entry) => entries.push(entry),
+      trackRequests: true,
       routes() {
         this.namespace = "/api";
         this.get("/tasks", []);
@@ -115,6 +116,7 @@ describe("intercepted request boundaries", () => {
           url: "https://owned.example.test/api/missing",
         },
       ]);
+      expect(server.unhandledRequests).toEqual(entries);
 
       const outside = await fetch(`${upstream.origin}/outside`);
       await expect(outside.text()).resolves.toBe("outside kajo");
@@ -130,6 +132,7 @@ describe("intercepted request boundaries", () => {
     try {
       const server = createServer({
         logging: (entry) => entries.push(entry),
+        trackRequests: true,
         routes() {
           this.namespace = "/api";
           this.get("/mocked", { source: "kajo" });
@@ -151,6 +154,8 @@ describe("intercepted request boundaries", () => {
         { method: "GET", reason: "rule", type: "passthrough" },
         { method: "POST", route: "/api/real", type: "handled" },
       ]);
+      expect(server.passthroughRequests).toEqual([entries[0]]);
+      expect(server.handledRequests).toEqual([entries[1]]);
     } finally {
       await upstream.close();
     }
@@ -189,6 +194,7 @@ describe("intercepted request boundaries", () => {
           this.namespace = "/api";
           this.get("/mocked", { source: "kajo" });
         },
+        trackRequests: true,
         unhandledRequest: "bypass",
         urlPrefix: upstream.origin,
       });
@@ -197,6 +203,13 @@ describe("intercepted request boundaries", () => {
       const response = await fetch(`${upstream.origin}/api/legacy`);
 
       await expect(response.text()).resolves.toBe("legacy API");
+      expect(server.passthroughRequests).toMatchObject([
+        {
+          reason: "policy",
+          type: "passthrough",
+          url: `${upstream.origin}/api/legacy`,
+        },
+      ]);
     } finally {
       await upstream.close();
     }

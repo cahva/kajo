@@ -43,6 +43,8 @@ and this project adheres to
 - Typed request diagnostics for handled, passthrough, unhandled, and errored
   requests, with parsed request bodies in an optional collapsed browser-console
   view.
+- Opt-in typed request history for handled, passthrough, unhandled, and errored
+  traffic, with explicit history clearing.
 
 ### Fixed
 

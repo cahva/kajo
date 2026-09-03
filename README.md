@@ -202,6 +202,25 @@ createServer({
 });
 ```
 
+Enable `trackRequests` when tests need to inspect traffic after it has been
+routed. Tracking is off by default to avoid retaining requests throughout long
+development sessions:
+
+```ts
+const server = createServer({
+  trackRequests: true,
+  // ...
+});
+
+expect(server.handledRequests[0]?.requestBody).toBe('{"status":"done"}');
+
+server.requestHistory;
+server.passthroughRequests;
+server.unhandledRequests;
+server.erroredRequests;
+server.clearRequestHistory();
+```
+
 Factories generate realistic model data with sequences, dependent attributes,
 traits, and final overrides:
 

@@ -27,7 +27,15 @@ import {
   pluralize,
   type Schema,
 } from "./model.ts";
-import { logRequestToConsole, type RequestLog, type RequestLogger } from "./logging.ts";
+import {
+  type ErroredRequestLog,
+  type HandledRequestLog,
+  logRequestToConsole,
+  type PassthroughRequestLog,
+  type RequestLog,
+  type RequestLogger,
+  type UnhandledRequestLog,
+} from "./logging.ts";
 import { Router } from "./router.ts";
 import { serialize, type SerializerRegistry } from "./serializer.ts";
 import { createShorthandHandler, type ShorthandMethod } from "./shorthand.ts";
@@ -76,6 +84,8 @@ export interface ServerOptions<
   readonly intercept?: boolean;
   /** Log routed requests to the console or a custom typed logger. */
   readonly logging?: boolean | RequestLogger;
+  /** Retain routed requests for later inspection and test assertions. */
+  readonly trackRequests?: boolean;
   /** Behavior for unmatched requests inside Kajo's owned URL boundary. */
   readonly unhandledRequest?: UnhandledRequestPolicy;
   /** Default origin or absolute base URL used by routes. */
@@ -106,6 +116,12 @@ export class Server<
   readonly #models: Models;
   readonly #factorySequences = new Map<string, number>();
   readonly #factoryStack: string[] = [];
+  readonly #requestHistory: RequestLog[] = [];
+  readonly #handledRequests: HandledRequestLog[] = [];
+  readonly #passthroughRequests: PassthroughRequestLog[] = [];
+  readonly #unhandledRequests: UnhandledRequestLog[] = [];
+  readonly #erroredRequests: ErroredRequestLog[] = [];
+  readonly #trackRequests: boolean;
   readonly #unhandledRequest: UnhandledRequestPolicy;
   #interceptor: NetworkInterceptor | undefined;
   #isRunning = true;
@@ -128,6 +144,31 @@ export class Server<
   /** Data available to route handlers. */
   readonly schema: Schema<ServerTables<Fixtures, Models>, Models>;
 
+  /** Every tracked request, in the order routing decisions complete. */
+  get requestHistory(): readonly RequestLog[] {
+    return this.#requestHistory;
+  }
+
+  /** Requests that were handled by a registered Kajo route. */
+  get handledRequests(): readonly HandledRequestLog[] {
+    return this.#handledRequests;
+  }
+
+  /** Requests allowed to continue to the real network. */
+  get passthroughRequests(): readonly PassthroughRequestLog[] {
+    return this.#passthroughRequests;
+  }
+
+  /** Owned requests without a matching route or passthrough. */
+  get unhandledRequests(): readonly UnhandledRequestLog[] {
+    return this.#unhandledRequests;
+  }
+
+  /** Requests whose matched route failed unexpectedly. */
+  get erroredRequests(): readonly ErroredRequestLog[] {
+    return this.#erroredRequests;
+  }
+
   constructor(options: Omit<ServerOptions<Fixtures, Models>, "routes" | "seeds"> = {}) {
     this.timing = options.timing ?? 0;
     this.logging = options.logging ?? false;
@@ -136,6 +177,7 @@ export class Server<
     this.#serializers = options.serializers ?? {};
     this.#factories = options.factories ?? {};
     this.#models = (options.models ?? {}) as Models;
+    this.#trackRequests = options.trackRequests ?? false;
     this.db = createDatabase(options.fixtures) as Database<ServerTables<Fixtures, Models>>;
 
     for (const modelName of Object.keys(options.models ?? {})) {
@@ -397,6 +439,20 @@ export class Server<
   }
 
   #log(entry: RequestLog): void {
+    if (this.#trackRequests) {
+      this.#requestHistory.push(entry);
+
+      if (entry.type === "handled") {
+        this.#handledRequests.push(entry);
+      } else if (entry.type === "passthrough") {
+        this.#passthroughRequests.push(entry);
+      } else if (entry.type === "unhandled") {
+        this.#unhandledRequests.push(entry);
+      } else {
+        this.#erroredRequests.push(entry);
+      }
+    }
+
     const logger = this.logging === true ? logRequestToConsole : this.logging;
 
     if (typeof logger === "function") {
@@ -413,6 +469,15 @@ export class Server<
     this.#interceptor?.dispose();
     this.#interceptor = undefined;
     this.#isRunning = false;
+  }
+
+  /** Remove all retained request history without changing route configuration. */
+  clearRequestHistory(): void {
+    this.#requestHistory.length = 0;
+    this.#handledRequests.length = 0;
+    this.#passthroughRequests.length = 0;
+    this.#unhandledRequests.length = 0;
+    this.#erroredRequests.length = 0;
   }
 
   delete(
@@ -597,6 +662,7 @@ export function createServer<Fixtures extends DatabaseData = {}, Models extends 
     models: options.models,
     serializers: options.serializers,
     timing: options.timing,
+    trackRequests: options.trackRequests,
     unhandledRequest: options.unhandledRequest,
     urlPrefix: options.urlPrefix,
   });
