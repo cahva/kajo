@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vite-plus/test";
+import { describe, expect, expectTypeOf, test } from "vite-plus/test";
 import { createServer, model } from "../src/index.ts";
 
 function createMovieServer() {
@@ -61,6 +61,41 @@ describe("route shorthands", () => {
     });
   });
 
+  test("normalizes typed attributes for custom route handlers", async () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        movie: model<{ released?: boolean; title: string }>(),
+      },
+      routes() {
+        this.post("/custom-movies", (schema, request) => {
+          const attributes = this.normalizedRequestAttrs(request, "movie");
+          expectTypeOf(attributes.title).toEqualTypeOf<string>();
+          return schema.movies.create(attributes);
+        });
+      },
+    });
+    const rooted = await server.handle(
+      new Request("https://example.test/custom-movies", {
+        body: JSON.stringify({ movie: { title: "Contact" } }),
+        method: "POST",
+      }),
+    );
+    const unrooted = await server.handle(
+      new Request("https://example.test/custom-movies", {
+        body: JSON.stringify({ title: "Arrival" }),
+        method: "POST",
+      }),
+    );
+
+    await expect(rooted?.json()).resolves.toEqual({
+      movie: { id: "1", title: "Contact" },
+    });
+    await expect(unrooted?.json()).resolves.toEqual({
+      movie: { id: "2", title: "Arrival" },
+    });
+  });
+
   test.each([
     [
       "PATCH",
@@ -120,7 +155,7 @@ describe("route shorthands", () => {
 
     expect(response?.status).toBe(400);
     await expect(response?.json()).resolves.toEqual({
-      error: "The POST shorthand expected a JSON request body.",
+      error: "The POST request expected a JSON request body.",
     });
   });
 });

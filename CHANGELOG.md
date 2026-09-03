@@ -38,6 +38,8 @@ and this project adheres to
   attribute, and relationship ID serialization.
 - Conventional CRUD route shorthands with inferred or explicit schema
   collections and normalized JSON request bodies.
+- Typed `normalizedRequestAttrs()` support for sharing rooted and unrooted JSON
+  normalization with custom route handlers.
 - Runnable vanilla TypeScript task-board example covering browser interception,
   relationships, serializers, a CRUD resource, and custom handlers.
 - Typed factories with sequences, order-independent dependent attributes,

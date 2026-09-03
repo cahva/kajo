@@ -246,6 +246,11 @@ this.get("/posts/search", (schema, request) => {
 this.get("/files/*path", (_schema, request) => {
   return { path: request.params.path };
 });
+
+this.post("/posts/publish", (schema, request) => {
+  const attributes = this.normalizedRequestAttrs(request, "post");
+  return schema.posts.create({ ...attributes, published: true });
+});
 ```
 
 For conventional CRUD behavior, omit the handler. Kajo infers the schema
@@ -260,6 +265,11 @@ this.post("/posts");
 this.patch("/posts/:id");
 this.del("/posts/:id");
 ```
+
+`normalizedRequestAttrs()` accepts both `{ post: { ... } }` and unrooted
+`{ ... }` JSON objects. The model name is checked against the configured model
+registry and determines both the inferred attribute type and optional root.
+Malformed or non-object JSON produces a structured `400` response.
 
 Use `resource()` to register a complete CRUD resource:
 

@@ -43,7 +43,11 @@ import {
 } from "./logging.ts";
 import { Router } from "./router.ts";
 import { serialize, type SerializerRegistry } from "./serializer.ts";
-import { createShorthandHandler, type ShorthandMethod } from "./shorthand.ts";
+import {
+  createShorthandHandler,
+  normalizedRequestAttrs,
+  type ShorthandMethod,
+} from "./shorthand.ts";
 
 const HTTP_METHODS = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"] as const;
 
@@ -236,6 +240,17 @@ export class Server<
     }
 
     this.db.loadData(selected as Partial<ServerTables<Fixtures, Models>>);
+  }
+
+  /**
+   * Normalize a model's rooted or unrooted JSON request body for a custom
+   * handler.
+   */
+  normalizedRequestAttrs<Name extends keyof Models & string>(
+    request: KajoRequest,
+    modelName: Name,
+  ): ModelCreateInput<Models, Name> {
+    return normalizedRequestAttrs<ModelCreateInput<Models, Name>>(request, modelName);
   }
 
   /**

@@ -40,11 +40,11 @@ export function createShorthandHandler<Tables extends DatabaseData, Models exten
       case "GET":
         return request.params.id ? findModel(collection, request.params.id) : collection.all();
       case "POST":
-        return collection.create(requestAttributes(request, collection.modelName));
+        return collection.create(normalizedRequestAttrs(request, collection.modelName));
       case "PATCH":
       case "PUT":
         return findModel(collection, requireId(request, method)).update(
-          requestAttributes(request, collection.modelName),
+          normalizedRequestAttrs(request, collection.modelName),
         );
       case "DELETE":
         findModel(collection, requireId(request, method)).destroy();
@@ -97,9 +97,18 @@ function isRuntimeCollection(value: unknown): value is RuntimeCollection {
   );
 }
 
-function requestAttributes(request: KajoRequest, modelName: string): object {
+/**
+ * Parse an object request body and remove an optional resource root.
+ *
+ * The generic attribute type lets custom handlers retain their application
+ * types without coupling normalization to a specific schema.
+ */
+export function normalizedRequestAttrs<Attributes extends object = Record<string, unknown>>(
+  request: KajoRequest,
+  modelName?: string,
+): Attributes {
   if (!request.requestBody) {
-    return {};
+    return {} as Attributes;
   }
 
   let payload: unknown;
@@ -107,24 +116,24 @@ function requestAttributes(request: KajoRequest, modelName: string): object {
   try {
     payload = JSON.parse(request.requestBody);
   } catch {
-    throw new HttpError(400, `The ${request.method} shorthand expected a JSON request body.`);
+    throw new HttpError(400, `The ${request.method} request expected a JSON request body.`);
   }
 
   if (!isRecord(payload)) {
-    throw new HttpError(400, `The ${request.method} shorthand expected a JSON object.`);
+    throw new HttpError(400, `The ${request.method} request expected a JSON object.`);
   }
 
-  const rootedAttributes = payload[modelName];
+  const rootedAttributes = modelName ? payload[modelName] : undefined;
 
   if (rootedAttributes !== undefined) {
     if (!isRecord(rootedAttributes)) {
       throw new HttpError(400, `The "${modelName}" request root must contain a JSON object.`);
     }
 
-    return rootedAttributes;
+    return rootedAttributes as Attributes;
   }
 
-  return payload;
+  return payload as Attributes;
 }
 
 function findModel(collection: RuntimeCollection, id: string): RuntimeModel {

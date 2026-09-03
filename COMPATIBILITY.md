@@ -97,15 +97,15 @@ change before the first stable version.
 
 ## Route shorthands
 
-| Mirage capability                              | Kajo status   | Notes                                                                           |
-| ---------------------------------------------- | ------------- | ------------------------------------------------------------------------------- |
-| GET index and show shorthands                  | **Supported** | Collection names can be inferred or specified explicitly.                       |
-| POST create shorthand                          | **Supported** | Rooted and unrooted JSON bodies are normalized.                                 |
-| PUT/PATCH update shorthand                     | **Supported** | Missing records and malformed payloads use structured HTTP errors.              |
-| DELETE shorthand                               | **Supported** | Returns an empty successful response.                                           |
-| `resource()` CRUD registration                 | **Supported** | Kajo addition with `only`, `except`, and custom paths.                          |
-| `normalizedRequestAttrs()` for custom handlers | **Planned**   | Shorthands normalize internally; custom handlers currently parse `requestBody`. |
-| Coalesced GET requests                         | **Planned**   | Depends on serializer and query compatibility decisions.                        |
+| Mirage capability                              | Kajo status   | Notes                                                                         |
+| ---------------------------------------------- | ------------- | ----------------------------------------------------------------------------- |
+| GET index and show shorthands                  | **Supported** | Collection names can be inferred or specified explicitly.                     |
+| POST create shorthand                          | **Supported** | Rooted and unrooted JSON bodies are normalized.                               |
+| PUT/PATCH update shorthand                     | **Supported** | Missing records and malformed payloads use structured HTTP errors.            |
+| DELETE shorthand                               | **Supported** | Returns an empty successful response.                                         |
+| `resource()` CRUD registration                 | **Supported** | Kajo addition with `only`, `except`, and custom paths.                        |
+| `normalizedRequestAttrs()` for custom handlers | **Supported** | Takes an explicit request and model name to preserve typing and async safety. |
+| Coalesced GET requests                         | **Planned**   | Depends on serializer and query compatibility decisions.                      |
 
 ## Known Mirage issues already addressed
 
@@ -121,7 +121,7 @@ These are behavioral inputs, not commitments to preserve Mirage internals.
 
 ## Prioritized compatibility work
 
-1. Add request normalization helpers and decide coalesced request behavior.
+1. Decide and document coalesced request behavior.
 2. Add polymorphic `hasMany` if issue research demonstrates a current use case.
 3. Expand the issue-driven regression suite before declaring a stable API.
 
