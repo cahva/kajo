@@ -26,8 +26,10 @@ export type {
   RouteResponder,
   RouteResult,
 } from "./http.ts";
-export { Collection, createSchema, model, ModelCollection } from "./model.ts";
+export { belongsTo, Collection, createSchema, hasMany, model, ModelCollection } from "./model.ts";
 export type {
+  BelongsToDefinition,
+  HasManyDefinition,
   Model,
   ModelAttributes,
   ModelDefinition,
@@ -35,6 +37,9 @@ export type {
   ModelRegistry,
   ModelTables,
   Pluralize,
+  RelationshipDefinition,
+  RelationshipOptions,
+  RelationshipRegistry,
   Schema,
 } from "./model.ts";
 export { createServer, Server } from "./server.ts";

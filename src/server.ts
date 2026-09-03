@@ -52,7 +52,7 @@ export class Server<
   Fixtures extends DatabaseData = DatabaseData,
   Models extends ModelRegistry = {},
 > {
-  readonly #router = new Router<ServerTables<Fixtures, Models>>();
+  readonly #router = new Router<ServerTables<Fixtures, Models>, Models>();
   #interceptor: NetworkInterceptor | undefined;
   #isRunning = true;
 
@@ -66,21 +66,18 @@ export class Server<
   readonly db: Database<ServerTables<Fixtures, Models>>;
 
   /** Data available to route handlers. */
-  readonly schema: Schema<ServerTables<Fixtures, Models>>;
+  readonly schema: Schema<ServerTables<Fixtures, Models>, Models>;
 
   constructor(options: Omit<ServerOptions<Fixtures, Models>, "routes" | "seeds"> = {}) {
     this.timing = options.timing ?? 0;
     this.db = createDatabase(options.fixtures) as Database<ServerTables<Fixtures, Models>>;
 
-    const modelNames: Record<string, string> = {};
-
     for (const modelName of Object.keys(options.models ?? {})) {
       const collectionName = pluralize(modelName);
       this.db.createCollection(collectionName);
-      modelNames[collectionName] = modelName;
     }
 
-    this.schema = createSchema(this.db, modelNames);
+    this.schema = createSchema(this.db, options.models);
 
     if (options.intercept !== false) {
       this.#interceptor = interceptRequests((request) => this.handle(request));
@@ -125,7 +122,7 @@ export class Server<
 
   delete(
     path: string,
-    responder: RouteResponder<ServerTables<Fixtures, Models>>,
+    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
     options: RouteOptions = {},
   ): void {
     this.#register("DELETE", path, responder, options);
@@ -133,7 +130,7 @@ export class Server<
 
   del(
     path: string,
-    responder: RouteResponder<ServerTables<Fixtures, Models>>,
+    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
     options: RouteOptions = {},
   ): void {
     this.delete(path, responder, options);
@@ -141,7 +138,7 @@ export class Server<
 
   get(
     path: string,
-    responder: RouteResponder<ServerTables<Fixtures, Models>>,
+    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
     options: RouteOptions = {},
   ): void {
     this.#register("GET", path, responder, options);
@@ -149,7 +146,7 @@ export class Server<
 
   head(
     path: string,
-    responder: RouteResponder<ServerTables<Fixtures, Models>>,
+    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
     options: RouteOptions = {},
   ): void {
     this.#register("HEAD", path, responder, options);
@@ -157,7 +154,7 @@ export class Server<
 
   options(
     path: string,
-    responder: RouteResponder<ServerTables<Fixtures, Models>>,
+    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
     options: RouteOptions = {},
   ): void {
     this.#register("OPTIONS", path, responder, options);
@@ -165,7 +162,7 @@ export class Server<
 
   patch(
     path: string,
-    responder: RouteResponder<ServerTables<Fixtures, Models>>,
+    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
     options: RouteOptions = {},
   ): void {
     this.#register("PATCH", path, responder, options);
@@ -173,7 +170,7 @@ export class Server<
 
   post(
     path: string,
-    responder: RouteResponder<ServerTables<Fixtures, Models>>,
+    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
     options: RouteOptions = {},
   ): void {
     this.#register("POST", path, responder, options);
@@ -181,7 +178,7 @@ export class Server<
 
   put(
     path: string,
-    responder: RouteResponder<ServerTables<Fixtures, Models>>,
+    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
     options: RouteOptions = {},
   ): void {
     this.#register("PUT", path, responder, options);
@@ -190,7 +187,7 @@ export class Server<
   #register(
     method: HttpMethod,
     path: string,
-    responder: RouteResponder<ServerTables<Fixtures, Models>>,
+    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
     options: RouteOptions,
   ): void {
     this.#router.add(method, joinPaths(this.namespace, path), responder, options);
@@ -229,13 +226,13 @@ async function createRouteRequest(
   };
 }
 
-async function resolveResponder<Tables extends DatabaseData>(
-  responder: RouteResponder<Tables>,
+async function resolveResponder<Tables extends DatabaseData, Models extends ModelRegistry>(
+  responder: RouteResponder<Tables, Models>,
   request: KajoRequest,
-  schema: Schema<Tables>,
+  schema: Schema<Tables, Models>,
 ): Promise<JsonSerializable | JsonValue | Response | undefined> {
   if (typeof responder === "function") {
-    return (responder as RouteHandler<Tables>)(schema, request);
+    return (responder as RouteHandler<Tables, Models>)(schema, request);
   }
 
   return responder instanceof Response ? responder.clone() : responder;

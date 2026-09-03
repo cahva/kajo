@@ -1,31 +1,38 @@
 import type { DatabaseData } from "./database.ts";
 import type { RouteOptions, RouteResponder } from "./http.ts";
+import type { ModelRegistry } from "./model.ts";
 
 interface RouteSegment {
   readonly kind: "parameter" | "static";
   readonly value: string;
 }
 
-export interface Route<Tables extends DatabaseData = DatabaseData> {
+export interface Route<
+  Tables extends DatabaseData = DatabaseData,
+  Models extends ModelRegistry = {},
+> {
   readonly method: string;
   readonly path: string;
-  readonly responder: RouteResponder<Tables>;
+  readonly responder: RouteResponder<Tables, Models>;
   readonly segments: readonly RouteSegment[];
   readonly options: RouteOptions;
 }
 
-export interface RouteMatch<Tables extends DatabaseData = DatabaseData> {
-  readonly route: Route<Tables>;
+export interface RouteMatch<
+  Tables extends DatabaseData = DatabaseData,
+  Models extends ModelRegistry = {},
+> {
+  readonly route: Route<Tables, Models>;
   readonly params: Readonly<Record<string, string>>;
 }
 
-export class Router<Tables extends DatabaseData = DatabaseData> {
-  readonly #routes: Route<Tables>[] = [];
+export class Router<Tables extends DatabaseData = DatabaseData, Models extends ModelRegistry = {}> {
+  readonly #routes: Route<Tables, Models>[] = [];
 
   add(
     method: string,
     path: string,
-    responder: RouteResponder<Tables>,
+    responder: RouteResponder<Tables, Models>,
     options: RouteOptions,
   ): void {
     const normalizedPath = normalizePath(path);
@@ -39,9 +46,13 @@ export class Router<Tables extends DatabaseData = DatabaseData> {
     });
   }
 
-  match(method: string, path: string): RouteMatch<Tables> | undefined {
+  match(method: string, path: string): RouteMatch<Tables, Models> | undefined {
     const requestSegments = splitPath(normalizePath(path));
-    let bestMatch: (RouteMatch<Tables> & { readonly staticSegmentCount: number }) | undefined;
+    let bestMatch:
+      | (RouteMatch<Tables, Models> & {
+          readonly staticSegmentCount: number;
+        })
+      | undefined;
 
     for (const route of this.#routes) {
       if (

@@ -1,5 +1,5 @@
 import type { DatabaseData } from "./database.ts";
-import type { Schema } from "./model.ts";
+import type { ModelRegistry, Schema } from "./model.ts";
 
 /**
  * A JSON value that can be returned directly from a route handler.
@@ -45,19 +45,18 @@ export type RouteResult = JsonSerializable | JsonValue | Response | undefined;
 /**
  * Produces a response for a matched request.
  */
-export type RouteHandler<Tables extends DatabaseData = DatabaseData> = (
-  schema: Schema<Tables>,
-  request: KajoRequest,
-) => RouteResult | Promise<RouteResult>;
+export type RouteHandler<
+  Tables extends DatabaseData = DatabaseData,
+  Models extends ModelRegistry = {},
+> = (schema: Schema<Tables, Models>, request: KajoRequest) => RouteResult | Promise<RouteResult>;
 
 /**
  * A route handler or a static JSON response.
  */
-export type RouteResponder<Tables extends DatabaseData = DatabaseData> =
-  | JsonSerializable
-  | JsonValue
-  | Response
-  | RouteHandler<Tables>;
+export type RouteResponder<
+  Tables extends DatabaseData = DatabaseData,
+  Models extends ModelRegistry = {},
+> = JsonSerializable | JsonValue | Response | RouteHandler<Tables, Models>;
 
 /**
  * Per-route behavior.

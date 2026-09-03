@@ -30,7 +30,7 @@ Kajo can register typed route handlers and intercept requests made with Fetch
 or XMLHttpRequest:
 
 ```ts
-import { createServer, model } from "@cahva/kajo";
+import { belongsTo, createServer, hasMany, model } from "@cahva/kajo";
 
 interface Movie {
   title: string;
@@ -63,6 +63,23 @@ handlers. Schema collections return model instances, while low-level database
 collections support `find`, `findBy`, `where`, `insert`, `firstOrCreate`,
 `update`, and `remove`. Use `loadData`, `emptyData`, and `dump` to manage the
 database as a whole.
+
+Relationships are declared by extending a typed model:
+
+```ts
+const models = {
+  post: model<{ title: string }>().extend({
+    author: belongsTo("user"),
+  }),
+  user: model<{ name: string }>().extend({
+    posts: hasMany("post"),
+  }),
+};
+```
+
+Kajo infers the inverse when there is exactly one match. Use
+`{ inverse: "relationshipName" }` to disambiguate, or `{ inverse: null }` for
+an association without an inverse.
 
 ## Principles
 

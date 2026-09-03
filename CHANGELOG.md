@@ -21,5 +21,7 @@ and this project adheres to
   mutations, and reset behavior.
 - Typed model definitions, schema collections, persisted model instances, and
   automatic model response serialization.
+- Typed `belongsTo` and `hasMany` relationships with inverse discovery,
+  explicit inverses, and foreign-key synchronization.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD
