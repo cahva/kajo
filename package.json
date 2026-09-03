@@ -27,6 +27,7 @@
     "publish:check": "vp exec jsr publish --dry-run --allow-dirty",
     "release": "vp exec jsr publish",
     "test": "vp test",
+    "test:browser": "vp test --config vite.browser.config.ts",
     "prepare": "vp config"
   },
   "dependencies": {
@@ -34,7 +35,9 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "@vitest/browser-playwright": "4.1.11",
     "jsr": "0.14.3",
+    "playwright": "^1.62.1",
     "typescript": "^7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:"

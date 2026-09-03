@@ -19,6 +19,7 @@
     "pnpm-workspace.yaml",
     "tests",
     "tsconfig.json",
+    "vite.browser.config.ts",
     "vite.config.ts"
   ]
 }

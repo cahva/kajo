@@ -314,6 +314,16 @@ Run the unit tests:
 vp test
 ```
 
+Run the real-browser interception suite:
+
+```bash
+vp exec playwright install chromium
+vp run test:browser
+```
+
+Set `KAJO_CHROMIUM_PATH` to use an existing Chromium executable instead of a
+Playwright-managed browser.
+
 Build the library:
 
 ```bash

@@ -38,7 +38,7 @@ change before the first stable version.
 | Pretender access and hooks             | **Not planned** | Kajo uses MSW interceptors and exposes typed logging and request history instead.                  |
 | Mirage `Response` class                | **Different**   | Return the standard web `Response`; use `HttpError` for expected JSON failures.                    |
 | Fetch interception                     | **Supported**   | Requests outside Kajo's registered origin and path boundaries are ignored.                         |
-| XMLHttpRequest interception            | **Partial**     | Installed through MSW interceptors; automated real-browser coverage is still planned.              |
+| XMLHttpRequest interception            | **Supported**   | Fetch and XMLHttpRequest interception run in the headless Chromium compatibility suite.            |
 
 ## Database
 
@@ -119,13 +119,11 @@ These are behavioral inputs, not commitments to preserve Mirage internals.
 
 ## Prioritized compatibility work
 
-1. Add browser-level Fetch and XMLHttpRequest integration tests for routing and
-   interception.
-2. Fill schema and model lifecycle gaps, especially unsaved models and
+1. Fill schema and model lifecycle gaps, especially unsaved models and
    relationship ID APIs.
-3. Add dedicated REST, ActiveModel, and JSON:API serializers.
-4. Add polymorphic relationships and their serializer behavior.
-5. Add configurable identity managers and selective fixture loading.
-6. Expand the issue-driven regression suite before declaring a stable API.
+2. Add dedicated REST, ActiveModel, and JSON:API serializers.
+3. Add polymorphic relationships and their serializer behavior.
+4. Add configurable identity managers and selective fixture loading.
+5. Expand the issue-driven regression suite before declaring a stable API.
 
 OpenAPI integration starts after this compatibility foundation is stable.

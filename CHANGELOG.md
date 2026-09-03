@@ -49,6 +49,8 @@ and this project adheres to
   intentional differences, issue-driven fixes, and the prioritized backlog.
 - Named wildcard routes, decoded static and parameter segments, consistent
   trailing-slash handling, and deterministic route specificity.
+- A separate headless Chromium suite covering real Fetch and XMLHttpRequest
+  interception.
 
 ### Fixed
 
