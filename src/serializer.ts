@@ -26,6 +26,7 @@ export interface SerializerOptions {
   readonly keyForEmbeddedRelationship?: (relationshipName: string) => string;
   readonly keyForForeignKey?: (relationshipName: string) => string;
   readonly keyForModel?: (modelName: string) => string;
+  readonly keyForPolymorphicType?: (relationshipName: string) => string;
   readonly keyForRelationship?: (modelName: string) => string;
   readonly keyForRelationshipIds?: (relationshipName: string) => string;
 }
@@ -95,6 +96,12 @@ export class Serializer {
 
   keyForModel(modelName: string): string {
     return this.#options.keyForModel?.(modelName) ?? modelName;
+  }
+
+  keyForPolymorphicType(relationshipName: string): string {
+    return (
+      this.#options.keyForPolymorphicType?.(relationshipName) ?? this.keyForAttribute("__type")
+    );
   }
 
   keyForRelationship(modelName: string): string {
@@ -193,6 +200,13 @@ interface Sideload {
   readonly root: string;
 }
 
+interface PrimaryResource {
+  readonly isCollection: boolean;
+  readonly isPolymorphic: boolean;
+  readonly modelNames: readonly string[];
+  readonly models: SerializableModel[];
+}
+
 /**
  * Serialize a model or collection returned from a route handler.
  */
@@ -207,32 +221,43 @@ export function serialize(
     return value;
   }
 
-  if (primary.isPolymorphic) {
-    return serializePolymorphicCollection(primary.models, request, serializers);
-  }
-
   const sideloads = new Map<string, Sideload>();
   const visited = new Set<string>();
-  const primarySerializer = serializerFor(primary.modelName, serializers);
-  const data = primary.models.map((resource) =>
-    serializeModel(resource, request, serializers, sideloads, visited),
+  const primarySerializers = primary.modelNames.map((modelName) =>
+    serializerFor(modelName, serializers),
   );
-  const primaryData = primary.isCollection ? data : data[0];
+  const rootModes = new Set(primarySerializers.map(({ root }) => root));
 
-  if (!primarySerializer.root) {
-    return primaryData;
-  }
-
-  const payload: Record<string, unknown> = {
-    [primarySerializer.rootKey(primary.modelName, primary.isCollection)]: primaryData,
-  };
-
-  for (const sideload of sideloads.values()) {
-    payload[sideload.root] = [...sideload.models.values()].map((resource) =>
-      serializeModel(resource, request, serializers, sideloads, visited),
+  if (primary.isPolymorphic && rootModes.size > 1) {
+    throw new TypeError(
+      "A polymorphic collection cannot mix rooted and rootless target serializers.",
     );
   }
 
+  const emitted = new Set(primary.models.map((resource) => `${resource.modelName}:${resource.id}`));
+  const entries = primary.models.map((resource) => ({
+    data: serializeModel(resource, request, serializers, sideloads, visited),
+    resource,
+  }));
+
+  if (rootModes.has(false)) {
+    const data = entries.map(({ data: serialized }) => serialized);
+    return primary.isCollection ? data : data[0];
+  }
+
+  const payload: Record<string, unknown> = {};
+
+  for (const [index, modelName] of primary.modelNames.entries()) {
+    const serializer = primarySerializers[index];
+    const data = entries
+      .filter(({ resource }) => resource.modelName === modelName)
+      .map(({ data: serialized }) => serialized);
+    payload[serializer.rootKey(modelName, primary.isCollection)] = primary.isCollection
+      ? data
+      : data[0];
+  }
+
+  drainSideloads(payload, sideloads, emitted, request, serializers, visited);
   return payload;
 }
 
@@ -279,8 +304,8 @@ function serializeModel(
     if (serializer.embed) {
       const embedded = related.map((model) => {
         const serialized = serializeModel(model, request, serializers, sideloads, new Set(visited));
-        return relationship.kind === "hasMany" && relationship.polymorphic === true
-          ? { ...serialized, type: model.modelName }
+        return relationship.polymorphic === true
+          ? withPolymorphicType(serialized, model, name, serializers)
           : serialized;
       });
       json[serializer.keyForEmbeddedRelationship(name)] =
@@ -311,21 +336,12 @@ function relationshipModels(value: unknown): SerializableModel[] {
   return isSerializableModel(value) ? [value] : [];
 }
 
-function toPrimaryResource(value: unknown):
-  | {
-      readonly isPolymorphic: true;
-      readonly models: SerializableModel[];
-    }
-  | {
-      readonly isCollection: boolean;
-      readonly isPolymorphic: false;
-      readonly modelName: string;
-      readonly models: SerializableModel[];
-    }
-  | undefined {
+function toPrimaryResource(value: unknown): PrimaryResource | undefined {
   if (value instanceof PolymorphicCollection) {
     return {
+      isCollection: true,
       isPolymorphic: true,
+      modelNames: value.modelNames,
       models: value.models.filter(isSerializableModel),
     };
   }
@@ -334,7 +350,7 @@ function toPrimaryResource(value: unknown):
     return {
       isCollection: true,
       isPolymorphic: false,
-      modelName: value.modelName,
+      modelNames: [value.modelName],
       models: value.models.filter(isSerializableModel),
     };
   }
@@ -343,43 +359,68 @@ function toPrimaryResource(value: unknown):
     ? {
         isCollection: false,
         isPolymorphic: false,
-        modelName: value.modelName,
+        modelNames: [value.modelName],
         models: [value],
       }
     : undefined;
 }
 
-function serializePolymorphicCollection(
-  models: SerializableModel[],
+function drainSideloads(
+  payload: Record<string, unknown>,
+  sideloads: Map<string, Sideload>,
+  emitted: Set<string>,
   request: KajoRequest,
   serializers: SerializerRegistry,
-): unknown {
-  const sideloads = new Map<string, Sideload>();
-  const serialized = models.map((model) => ({
-    data: serializeModel(model, request, serializers, sideloads, new Set()),
-    model,
-    serializer: serializerFor(model.modelName, serializers),
-  }));
+  visited: Set<string>,
+): void {
+  while (true) {
+    let pending: { resource: SerializableModel; root: string } | undefined;
 
-  if (serialized.every(({ serializer }) => !serializer.root)) {
-    return serialized.map(({ data }) => data);
+    for (const sideload of sideloads.values()) {
+      const resource = [...sideload.models.values()].find(
+        (model) => !emitted.has(`${model.modelName}:${model.id}`),
+      );
+
+      if (resource) {
+        pending = { resource, root: sideload.root };
+        break;
+      }
+    }
+
+    if (!pending) {
+      return;
+    }
+
+    const identity = `${pending.resource.modelName}:${pending.resource.id}`;
+    emitted.add(identity);
+    const serialized = serializeModel(pending.resource, request, serializers, sideloads, visited);
+    const existing = payload[pending.root];
+
+    if (Array.isArray(existing)) {
+      existing.push(serialized);
+    } else if (existing === undefined) {
+      payload[pending.root] = [serialized];
+    } else {
+      payload[pending.root] = [existing, serialized];
+    }
   }
+}
 
-  const payload: Record<string, unknown[]> = {};
+function withPolymorphicType(
+  serialized: Record<string, unknown>,
+  model: SerializableModel,
+  relationshipName: string,
+  serializers: SerializerRegistry,
+): Record<string, unknown> {
+  const key = serializerFor(model.modelName, serializers).keyForPolymorphicType(relationshipName);
 
-  for (const { data, model, serializer } of serialized) {
-    const root = serializer.rootKey(model.modelName, true);
-    (payload[root] ??= []).push(data);
-  }
-
-  for (const sideload of sideloads.values()) {
-    const data = [...sideload.models.values()].map((resource) =>
-      serializeModel(resource, request, serializers, sideloads, new Set()),
+  if (Object.prototype.hasOwnProperty.call(serialized, key)) {
+    throw new Error(
+      `Cannot serialize polymorphic type for "${relationshipName}" because "${key}" is already in use.`,
     );
-    (payload[sideload.root] ??= []).push(...data);
   }
 
-  return payload;
+  return { ...serialized, [key]: model.modelName };
 }
 
 function isSerializableModel(value: unknown): value is SerializableModel {

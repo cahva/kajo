@@ -252,10 +252,20 @@ createServer({
 ```
 
 `RestSerializer` uses rooted payloads and includes relationship IDs by default.
+Rooted polymorphic collections group members under each concrete model's
+collection root, including empty arrays when the collection has no members.
+Rootless polymorphic collections return one flat array. All target serializers
+must agree on rooted or rootless output; mixing the two modes throws an explicit
+error instead of changing the response shape based on its contents.
+
+Embedded polymorphic relationships include a collision-checked `__type`
+discriminator. Its key passes through `keyForAttribute`, and
+`keyForPolymorphicType` can customize it when another wire format is required.
 For formats that need more than option callbacks, subclass `Serializer` or
 `RestSerializer` and override `rootKey`, `serializeAttributes`,
-`shouldSerializeRelationshipIds`, or `serializeRelationshipIds`. Calling
-`extend()` on a subclass preserves its class and inherited behavior.
+`shouldSerializeRelationshipIds`, `serializeRelationshipIds`, or
+`keyForPolymorphicType`. Calling `extend()` on a subclass preserves its class
+and inherited behavior.
 
 Routes can be defined at three levels. Use a custom handler when an endpoint
 has application-specific behavior:

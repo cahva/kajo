@@ -80,6 +80,9 @@ and this project adheres to
 
 - Unified homogeneous and polymorphic collection behavior behind one internal
   implementation while retaining target-specific compatibility checks.
+- Embedded polymorphic relationships use a collision-checked, transform-aware
+  `__type` discriminator, and mixed rooted/rootless polymorphic serializers are
+  rejected explicitly.
 
 ### Fixed
 
@@ -90,5 +93,12 @@ and this project adheres to
   for polymorphic collections and embedded relationships.
 - Validated unsaved polymorphic relationships immediately and restricted bulk
   updates to attributes shared by every target model.
+- Unified primary-resource serialization and iterative sideload draining so
+  polymorphic roots stay stable, primary records are not duplicated, and
+  transitive includes are emitted.
+- Normalized the remaining inverse relationship comparisons and allowed
+  explicit `undefined` relationship placeholders to be assigned before save.
+- Excluded model IDs and conflicting target attribute types from polymorphic
+  bulk updates.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD

@@ -406,10 +406,37 @@ type PolymorphicUpdateAttributes<
   Models extends ModelRegistry,
   Targets extends readonly string[],
 > = {
-  [Key in keyof ModelAttributes<Models[Targets[number] & keyof Models]>]?: ModelAttributes<
-    Models[Targets[number] & keyof Models]
-  >[Key];
+  [Key in keyof PolymorphicTargetUpdates<Models, Targets>]?: IntersectTargetProperty<
+    Models,
+    Targets,
+    Key
+  >;
 };
+
+type PolymorphicTargetUpdates<
+  Models extends ModelRegistry,
+  Targets extends readonly string[],
+> = Targets[number] extends infer Name
+  ? Name extends keyof Models
+    ? UpdateAttributes<ModelAttributes<Models[Name]>>
+    : never
+  : never;
+
+type IntersectTargetProperty<
+  Models extends ModelRegistry,
+  Targets extends readonly string[],
+  Key extends keyof PolymorphicTargetUpdates<Models, Targets>,
+> = (
+  Targets[number] extends infer Name
+    ? Name extends keyof Models
+      ? Key extends keyof UpdateAttributes<ModelAttributes<Models[Name]>>
+        ? (value: UpdateAttributes<ModelAttributes<Models[Name]>>[Key]) => void
+        : never
+      : never
+    : never
+) extends (value: infer Intersection) => void
+  ? Intersection
+  : never;
 
 interface CollectionMember<Serialized extends object> {
   readonly id: string;
@@ -1099,7 +1126,9 @@ function createNewModel<
   let persisted = false;
 
   for (const [name, value] of relationshipValues) {
-    validateRelationshipValue(value, relationships[name], name);
+    if (value !== undefined) {
+      validateRelationshipValue(value, relationships[name], name);
+    }
   }
 
   const instance = {
@@ -1683,7 +1712,7 @@ function getRelationship<Models extends ModelRegistry>(
               return (
                 isPolymorphicIdentifier(identifier) &&
                 identifier.type === sourceModelName &&
-                identifier.id === sourceRecord.id
+                String(identifier.id) === sourceRecord.id
               );
             })
             .map(({ id }) => id),
@@ -1734,7 +1763,12 @@ function setRelationship<Models extends ModelRegistry>(
 
       if (
         previous &&
-        Reflect.get(previous.attrs, foreignKey(previousInverse.name)) === sourceRecord.id
+        inverseBelongsToSource(
+          previousInverse.definition,
+          Reflect.get(previous.attrs, foreignKey(previousInverse.name)),
+          sourceModelName,
+          sourceRecord.id,
+        )
       ) {
         Reflect.deleteProperty(previous.attrs, foreignKey(previousInverse.name));
       }

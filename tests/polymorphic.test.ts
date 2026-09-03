@@ -349,6 +349,54 @@ describe("polymorphic relationships", () => {
     expect(server.db.comments.find(1)).not.toHaveProperty("commentableId");
   });
 
+  test("normalizes numeric ids while deriving a polymorphic belongsTo inverse", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        comment: model<Comment>().extend({
+          commentable: belongsTo(["user"] as const, { inverse: "comments" }),
+        }),
+        user: model<User>().extend({
+          comments: hasMany("comment", { inverse: "commentable" }),
+        }),
+      },
+    });
+    server.db.users.insert({ name: "Ada" });
+    server.db.comments.insert({
+      body: "Hi",
+      commentableId: { id: 1, type: "user" },
+    } as never);
+
+    expect(server.schema.users.find(1)?.comments.models.map(({ id }) => id)).toEqual(["1"]);
+  });
+
+  test("clears the previous polymorphic belongsTo inverse during reassignment", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        photo: model<Photo>().extend({
+          owner: belongsTo(["user"] as const, { inverse: "avatar" }),
+        }),
+        user: model<User>().extend({
+          avatar: belongsTo(["photo", "video"] as const, { inverse: "owner" }),
+        }),
+        video: model<{ url: string }>().extend({
+          owner: belongsTo(["user"] as const, { inverse: "avatar" }),
+        }),
+      },
+    });
+    const ada = server.schema.users.create({ name: "Ada" });
+    const linus = server.schema.users.create({ name: "Linus" });
+    const photo = server.schema.photos.create({ url: "/avatar.jpg" });
+
+    photo.owner = ada;
+    photo.owner = linus;
+
+    expect(ada.avatar).toBeNull();
+    expect(linus.avatar?.id).toBe(photo.id);
+    expect(server.db.users.find(ada.id)).not.toHaveProperty("avatarId");
+  });
+
   test("updates attributes shared by every polymorphic member", () => {
     const server = createServer({
       intercept: false,
@@ -368,6 +416,33 @@ describe("polymorphic relationships", () => {
 
     expect(car.make).toBe("Kajo");
     expect(watch.make).toBe("Kajo");
+    const assertUpdateTypes = () => {
+      // @ts-expect-error Model ids cannot be updated.
+      user.things.update("id", "9");
+    };
+    void assertUpdateTypes;
+  });
+
+  test("rejects conflicting shared attribute types in bulk updates", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        car: model<{ year: number }>(),
+        user: model<User>().extend({
+          things: hasMany(["car", "watch"] as const, { inverse: null }),
+        }),
+        watch: model<{ year: string }>(),
+      },
+    });
+    const things = server.schema.users.create({ name: "Ada" }).things;
+
+    const assertUpdateTypes = () => {
+      // @ts-expect-error Conflicting target attribute types have no safe update value.
+      things.update("year", 2020);
+      // @ts-expect-error Conflicting target attribute types have no safe update value.
+      things.update("year", "2020");
+    };
+    void assertUpdateTypes;
   });
 
   test("rejects merging polymorphic collections with different target sets", () => {
@@ -450,7 +525,7 @@ describe("polymorphic relationships", () => {
     });
   });
 
-  test("embeds type discriminators for polymorphic hasMany members", async () => {
+  test("keeps empty polymorphic collection response roots", async () => {
     const server = createServer({
       intercept: false,
       models: {
@@ -461,7 +536,106 @@ describe("polymorphic relationships", () => {
         watch: model<{ make: string }>(),
       },
       routes() {
-        this.get("/users/:id", (schema, request) => schema.users.find(request.params.id));
+        this.get("/things", (schema) => schema.users.find(1)?.things);
+      },
+      seeds(server) {
+        server.schema.users.create({ name: "Ada" });
+      },
+    });
+
+    const response = await server.handle(new Request("https://example.test/things"));
+
+    await expect(response?.json()).resolves.toEqual({
+      cars: [],
+      watches: [],
+    });
+  });
+
+  test("does not duplicate a primary polymorphic member that is also sideloaded", async () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        car: model<{ make: string }>(),
+        user: model<User>().extend({
+          things: hasMany(["car", "watch"] as const, { inverse: null }),
+        }),
+        watch: model<{ make: string }>().extend({
+          car: belongsTo("car", { inverse: null }),
+        }),
+      },
+      routes() {
+        this.get("/things", (schema) => schema.users.find(1)?.things);
+      },
+      seeds(server) {
+        const car = server.schema.cars.create({ make: "Volvo" });
+        const watch = server.schema.watches.create({ car, make: "Leijona" });
+        server.schema.users.create({ name: "Ada", things: [car, watch] });
+      },
+      serializers: {
+        watch: RestSerializer.extend({ include: ["car"] }),
+      },
+    });
+
+    const response = await server.handle(new Request("https://example.test/things"));
+
+    await expect(response?.json()).resolves.toEqual({
+      cars: [{ id: "1", make: "Volvo" }],
+      watches: [{ carId: "1", id: "1", make: "Leijona" }],
+    });
+  });
+
+  test("emits transitive sideloads from polymorphic collections", async () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        car: model<{ make: string }>().extend({
+          owner: belongsTo("user", { inverse: null }),
+        }),
+        user: model<User>().extend({
+          manager: belongsTo("user", { inverse: null }),
+          things: hasMany(["car", "watch"] as const, { inverse: null }),
+        }),
+        watch: model<{ make: string }>(),
+      },
+      routes() {
+        this.get("/things", (schema) => schema.users.findBy({ name: "Collector" })?.things);
+      },
+      seeds(server) {
+        const manager = server.schema.users.create({ name: "Linus" });
+        const owner = server.schema.users.create({ manager, name: "Ada" });
+        const car = server.schema.cars.create({ make: "Volvo", owner });
+        server.schema.users.create({ name: "Collector", things: [car] });
+      },
+      serializers: {
+        car: RestSerializer.extend({ include: ["owner"] }),
+        user: RestSerializer.extend({ include: ["manager"] }),
+      },
+    });
+
+    const response = await server.handle(new Request("https://example.test/things"));
+
+    await expect(response?.json()).resolves.toEqual({
+      cars: [{ id: "1", make: "Volvo", ownerId: "2" }],
+      users: [
+        { id: "2", managerId: "1", name: "Ada", thingIds: [] },
+        { id: "1", managerId: null, name: "Linus", thingIds: [] },
+      ],
+      watches: [],
+    });
+  });
+
+  test("rejects mixed rooted and rootless polymorphic serializers", async () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        car: model<{ make: string }>(),
+        user: model<User>().extend({
+          things: hasMany(["car", "watch"] as const, { inverse: null }),
+        }),
+        watch: model<{ make: string }>(),
+      },
+      routes() {
+        this.get("/things", (schema) => schema.users.find(1)?.things);
       },
       seeds(server) {
         const car = server.schema.cars.create({ make: "Volvo" });
@@ -469,7 +643,43 @@ describe("polymorphic relationships", () => {
         server.schema.users.create({ name: "Ada", things: [car, watch] });
       },
       serializers: {
-        user: RestSerializer.extend({ embed: true, include: ["things"] }),
+        car: RestSerializer.extend({ root: false }),
+        watch: RestSerializer.extend(),
+      },
+    });
+
+    await expect(server.handle(new Request("https://example.test/things"))).rejects.toThrow(
+      "A polymorphic collection cannot mix rooted and rootless target serializers.",
+    );
+  });
+
+  test("embeds type discriminators for polymorphic hasMany members", async () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        car: model<{ make: string; type: string }>(),
+        user: model<User>().extend({
+          things: hasMany(["car", "watch"] as const, { inverse: null }),
+        }),
+        watch: model<{ make: string; type: string }>(),
+      },
+      routes() {
+        this.get("/users/:id", (schema, request) => schema.users.find(request.params.id));
+      },
+      seeds(server) {
+        const car = server.schema.cars.create({ make: "Volvo", type: "sedan" });
+        const watch = server.schema.watches.create({ make: "Leijona", type: "wristwatch" });
+        server.schema.users.create({ name: "Ada", things: [car, watch] });
+      },
+      serializers: {
+        application: RestSerializer.extend({
+          keyForAttribute: (attribute) => attribute.toUpperCase(),
+        }),
+        user: RestSerializer.extend({
+          embed: true,
+          include: ["things"],
+          keyForAttribute: (attribute) => attribute.toUpperCase(),
+        }),
       },
     });
 
@@ -477,12 +687,56 @@ describe("polymorphic relationships", () => {
 
     await expect(response?.json()).resolves.toEqual({
       user: {
-        id: "1",
-        name: "Ada",
+        ID: "1",
+        NAME: "Ada",
         things: [
-          { id: "1", make: "Volvo", type: "car" },
-          { id: "1", make: "Leijona", type: "watch" },
+          { __TYPE: "car", ID: "1", MAKE: "Volvo", TYPE: "sedan" },
+          { __TYPE: "watch", ID: "1", MAKE: "Leijona", TYPE: "wristwatch" },
         ],
+      },
+    });
+  });
+
+  test("embeds a transformed discriminator for polymorphic belongsTo", async () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        comment: model<Comment>().extend({
+          commentable: belongsTo(["photo", "post"] as const, { inverse: null }),
+        }),
+        photo: model<Photo>(),
+        post: model<Post>(),
+      },
+      routes() {
+        this.get("/comments/:id", (schema, request) => schema.comments.find(request.params.id));
+      },
+      seeds(server) {
+        const photo = server.schema.photos.create({ url: "/horizon.jpg" });
+        server.schema.comments.create({ body: "Nice", commentable: photo });
+      },
+      serializers: {
+        application: RestSerializer.extend({
+          keyForAttribute: (attribute) => attribute.toUpperCase(),
+        }),
+        comment: RestSerializer.extend({
+          embed: true,
+          include: ["commentable"],
+          keyForAttribute: (attribute) => attribute.toUpperCase(),
+        }),
+      },
+    });
+
+    const response = await server.handle(new Request("https://example.test/comments/1"));
+
+    await expect(response?.json()).resolves.toEqual({
+      comment: {
+        BODY: "Nice",
+        commentable: {
+          __TYPE: "photo",
+          ID: "1",
+          URL: "/horizon.jpg",
+        },
+        ID: "1",
       },
     });
   });

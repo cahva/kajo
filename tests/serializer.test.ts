@@ -126,6 +126,45 @@ describe("serializers", () => {
     });
   });
 
+  test("emits transitive sideloads from homogeneous resources", async () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        post: model<{ title: string }>().extend({
+          author: belongsTo("user", { inverse: null }),
+        }),
+        user: model<{ name: string }>().extend({
+          manager: belongsTo("user", { inverse: null }),
+        }),
+      },
+      routes() {
+        this.get("/posts/:id", (schema, request) => schema.posts.find(request.params.id));
+      },
+      seeds(server) {
+        const manager = server.schema.users.create({ name: "Linus" });
+        const author = server.schema.users.create({ manager, name: "Ada" });
+        server.schema.posts.create({ author, title: "Typed APIs" });
+      },
+      serializers: {
+        post: RestSerializer.extend({ include: ["author"] }),
+        user: RestSerializer.extend({ include: ["manager"] }),
+      },
+    });
+    const response = await server.handle(new Request("https://example.test/posts/1"));
+
+    await expect(response?.json()).resolves.toEqual({
+      post: {
+        authorId: "2",
+        id: "1",
+        title: "Typed APIs",
+      },
+      users: [
+        { id: "2", managerId: "1", name: "Ada" },
+        { id: "1", managerId: null, name: "Linus" },
+      ],
+    });
+  });
+
   test("embeds included relationships", async () => {
     const server = createPostServer(
       Serializer.extend({

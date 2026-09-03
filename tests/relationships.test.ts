@@ -81,6 +81,25 @@ describe("relationships", () => {
     expect(server.db.posts.find(saved.id)).toMatchObject({ authorId: user.id });
   });
 
+  test("allows an undefined hasMany placeholder to be assigned before save", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        post: model<Post>().extend({
+          tags: hasMany("tag", { inverse: null }),
+        }),
+        tag: model<{ name: string }>(),
+      },
+    });
+    const tag = server.schema.tags.create({ name: "TypeScript" });
+    const post = server.schema.posts.new({ tags: undefined, title: "Draft" });
+
+    Reflect.set(post, "tags", [tag]);
+    const saved = post.save();
+
+    expect(saved.tags.models.map(({ id }) => id)).toEqual([tag.id]);
+  });
+
   test("creates related models through typed association helpers", () => {
     const server = createServer({
       intercept: false,
