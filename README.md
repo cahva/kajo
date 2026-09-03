@@ -117,6 +117,10 @@ has application-specific behavior:
 this.get("/posts/search", (schema, request) => {
   return schema.posts.where({ title: request.queryParams.title });
 });
+
+this.get("/files/*path", (_schema, request) => {
+  return { path: request.params.path };
+});
 ```
 
 For conventional CRUD behavior, omit the handler. Kajo infers the schema

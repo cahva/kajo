@@ -2,10 +2,15 @@ import type { DatabaseData } from "./database.ts";
 import type { RouteOptions, RouteResponder } from "./http.ts";
 import type { ModelRegistry } from "./model.ts";
 
-interface RouteSegment {
-  readonly kind: "parameter" | "static";
-  readonly value: string;
-}
+type RouteSegment =
+  | {
+      readonly kind: "parameter" | "static";
+      readonly value: string;
+    }
+  | {
+      readonly kind: "wildcard";
+      readonly value: string;
+    };
 
 export interface Route<
   Tables extends DatabaseData = DatabaseData,
@@ -50,43 +55,61 @@ export class Router<Tables extends DatabaseData = DatabaseData, Models extends M
   }
 
   match(method: string, url: URL): RouteMatch<Tables, Models> | undefined {
-    const requestSegments = splitPath(normalizePath(url.pathname));
+    const requestSegments = decodeRequestSegments(normalizePath(url.pathname));
+
+    if (!requestSegments) {
+      return undefined;
+    }
+
     let bestMatch:
       | (RouteMatch<Tables, Models> & {
-          readonly staticSegmentCount: number;
+          readonly specificity: readonly number[];
         })
       | undefined;
 
     for (const route of this.#routes) {
+      const wildcardIndex = route.segments.findIndex((segment) => segment.kind === "wildcard");
+
       if (
         route.method !== method.toUpperCase() ||
         (route.origin !== undefined && route.origin !== url.origin) ||
-        route.segments.length !== requestSegments.length
+        (wildcardIndex === -1
+          ? route.segments.length !== requestSegments.length
+          : requestSegments.length <= wildcardIndex)
       ) {
         continue;
       }
 
       const params: Record<string, string> = {};
       let matches = true;
-      let staticSegmentCount = 0;
 
       for (const [index, segment] of route.segments.entries()) {
         const requestSegment = requestSegments[index];
+
+        if (segment.kind === "wildcard") {
+          params[segment.value] = requestSegments.slice(index).join("/");
+          break;
+        }
 
         if (segment.kind === "static") {
           if (segment.value !== requestSegment) {
             matches = false;
             break;
           }
-
-          staticSegmentCount += 1;
         } else {
-          params[segment.value] = decodeURIComponent(requestSegment);
+          if (!requestSegment) {
+            matches = false;
+            break;
+          }
+
+          params[segment.value] = requestSegment;
         }
       }
 
-      if (matches && (!bestMatch || staticSegmentCount > bestMatch.staticSegmentCount)) {
-        bestMatch = { route, params, staticSegmentCount };
+      const specificity = route.segments.map(segmentSpecificity);
+
+      if (matches && (!bestMatch || compareSpecificity(specificity, bestMatch.specificity) >= 0)) {
+        bestMatch = { route, params, specificity };
       }
     }
 
@@ -112,13 +135,67 @@ function normalizePath(path: string): string {
 }
 
 function parseSegments(path: string): RouteSegment[] {
-  return splitPath(path).map((segment) =>
-    segment.startsWith(":")
-      ? { kind: "parameter", value: segment.slice(1) }
-      : { kind: "static", value: segment },
-  );
+  const names = new Set<string>();
+
+  return splitPath(path).map((segment, index, segments) => {
+    if (segment.startsWith(":") || segment.startsWith("*")) {
+      const kind = segment.startsWith("*") ? "wildcard" : "parameter";
+      const name = segment.slice(1);
+
+      if (!name) {
+        throw new TypeError(`The ${kind} segment in route "${path}" must have a name.`);
+      }
+
+      if (names.has(name)) {
+        throw new TypeError(`Route "${path}" contains duplicate parameter "${name}".`);
+      }
+
+      if (kind === "wildcard" && index !== segments.length - 1) {
+        throw new TypeError(`The wildcard segment in route "${path}" must be last.`);
+      }
+
+      names.add(name);
+      return { kind, value: name };
+    }
+
+    return { kind: "static", value: decodeRouteSegment(segment, path) };
+  });
 }
 
 function splitPath(path: string): string[] {
   return path === "/" ? [] : path.slice(1).split("/");
+}
+
+function decodeRequestSegments(path: string): string[] | undefined {
+  try {
+    return splitPath(path).map((segment) => decodeURIComponent(segment));
+  } catch {
+    return undefined;
+  }
+}
+
+function decodeRouteSegment(segment: string, path: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    throw new TypeError(`Route "${path}" contains invalid percent encoding.`);
+  }
+}
+
+function segmentSpecificity(segment: RouteSegment): number {
+  return segment.kind === "static" ? 3 : segment.kind === "parameter" ? 2 : 1;
+}
+
+function compareSpecificity(left: readonly number[], right: readonly number[]): number {
+  const length = Math.max(left.length, right.length);
+
+  for (let index = 0; index < length; index += 1) {
+    const difference = (left[index] ?? 0) - (right[index] ?? 0);
+
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+
+  return 0;
 }

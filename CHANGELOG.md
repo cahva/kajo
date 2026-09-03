@@ -47,6 +47,8 @@ and this project adheres to
   traffic, with explicit history clearing.
 - A living Mirage JS compatibility matrix covering supported behavior,
   intentional differences, issue-driven fixes, and the prioritized backlog.
+- Named wildcard routes, decoded static and parameter segments, consistent
+  trailing-slash handling, and deterministic route specificity.
 
 ### Fixed
 

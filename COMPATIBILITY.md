@@ -27,7 +27,7 @@ change before the first stable version.
 | HTTP verb route helpers                | **Supported**   | `get`, `post`, `put`, `patch`, `delete`/`del`, `head`, and `options`.                              |
 | Static, function, and async handlers   | **Supported**   | Handlers may return JSON values, models, collections, or native responses.                         |
 | Dynamic `:params` and query parameters | **Supported**   | Available through the typed `KajoRequest`.                                                         |
-| Wildcard route segments                | **Planned**     | Named catch-all route matching is the next router milestone.                                       |
+| Wildcard route segments                | **Supported**   | A final `*name` captures one or more decoded path segments.                                        |
 | `namespace` and `urlPrefix`            | **Supported**   | Values apply at route registration time, matching Mirage's useful behavior.                        |
 | Global and per-route `timing`          | **Supported**   | Defaults to `0`; Kajo does not guess the runtime environment.                                      |
 | `passthrough()`                        | **Supported**   | Includes globs and method restrictions. Registered routes take precedence.                         |
@@ -119,8 +119,8 @@ These are behavioral inputs, not commitments to preserve Mirage internals.
 
 ## Prioritized compatibility work
 
-1. Complete router matching with named wildcards, encoded paths, trailing-slash
-   rules, and browser-level Fetch/XMLHttpRequest tests.
+1. Add browser-level Fetch and XMLHttpRequest integration tests for routing and
+   interception.
 2. Fill schema and model lifecycle gaps, especially unsaved models and
    relationship ID APIs.
 3. Add dedicated REST, ActiveModel, and JSON:API serializers.
