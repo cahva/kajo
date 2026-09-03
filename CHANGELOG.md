@@ -45,6 +45,8 @@ and this project adheres to
   view.
 - Opt-in typed request history for handled, passthrough, unhandled, and errored
   traffic, with explicit history clearing.
+- A living Mirage JS compatibility matrix covering supported behavior,
+  intentional differences, issue-driven fixes, and the prioritized backlog.
 
 ### Fixed
 

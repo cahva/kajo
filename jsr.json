@@ -3,7 +3,7 @@
   "name": "@cahva/kajo",
   "version": "0.0.0",
   "exports": "./src/index.ts",
-  "include": ["src", "README.md", "CHANGELOG.md", "LICENSE"],
+  "include": ["src", "README.md", "COMPATIBILITY.md", "CHANGELOG.md", "LICENSE"],
   "exclude": [
     ".git",
     ".gitignore",

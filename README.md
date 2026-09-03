@@ -20,8 +20,8 @@ The initial roadmap is:
 - An in-memory database with typed models and relationships
 - Factories, fixtures, traits, and seeds
 - Serializers and route shorthand helpers
-- A compatibility suite covering Mirage JS behavior and relevant reported
-  issues
+- A [compatibility suite](./COMPATIBILITY.md) covering Mirage JS behavior and
+  relevant reported issues
 - OpenAPI integration after the compatibility foundation is stable
 
 ## Current API
@@ -275,6 +275,10 @@ const postByAda = server.create("post", { author: ada });
   runtimes.
 - **Well tested.** Public behavior is specified by tests, including
   compatibility and regression coverage.
+
+See the living [Mirage JS compatibility matrix](./COMPATIBILITY.md) for
+supported behavior, intentional differences, and the prioritized parity
+backlog.
 
 ## Examples
 
