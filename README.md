@@ -358,12 +358,16 @@ interface User {
   active: boolean;
   name: string;
   role: "admin" | "member";
+  slug: string;
 }
 
 const userFactory = Factory.extend<User>({
   active: true,
   afterCreate(user) {
     console.log(`Created ${user.id}`);
+  },
+  slug() {
+    return this.name.toLowerCase().replaceAll(" ", "-");
   },
   name: (sequence) => `User ${sequence}`,
   role: "member",
@@ -379,6 +383,10 @@ createServer({
   },
 });
 ```
+
+Dependent attributes resolve lazily, so `slug` can read `name` even though it is
+declared first. Each function runs once per build. Dependency cycles report the
+attribute chain that caused them.
 
 Use `association()` on a belongs-to relationship to create its related model.
 Trait names are forwarded to the associated factory, while an explicit

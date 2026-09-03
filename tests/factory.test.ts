@@ -76,6 +76,61 @@ describe("factories", () => {
     });
   });
 
+  test("resolves dependent attributes in any order and evaluates each once", () => {
+    let nameCalls = 0;
+    const factory = Factory.extend<{ label: string; name: string; slug: string }>({
+      label() {
+        return `${this.name} (${this.slug})`;
+      },
+      slug() {
+        return this.name.toLowerCase().replaceAll(" ", "-");
+      },
+      name(sequence) {
+        nameCalls += 1;
+        return `User ${sequence}`;
+      },
+    });
+
+    expect(factory.build(3).attributes).toEqual({
+      label: "User 3 (user-3)",
+      name: "User 3",
+      slug: "user-3",
+    });
+    expect(nameCalls).toBe(1);
+  });
+
+  test("uses final trait values for dependent attributes", () => {
+    const factory = Factory.extend<{ label: string; role: string }>({
+      label() {
+        return `Role: ${this.role}`;
+      },
+      role: "member",
+      admin: trait({
+        role: "admin",
+      }),
+    });
+
+    expect(factory.build(0, ["admin"]).attributes).toEqual({
+      label: "Role: admin",
+      role: "admin",
+    });
+  });
+
+  test("reports factory attribute dependency cycles", () => {
+    const factory = Factory.extend<{ first: string; second: string }>({
+      first() {
+        return this.second;
+      },
+      second() {
+        return this.first;
+      },
+    });
+
+    expect(() => factory.build(0)).toThrow(
+      "Factory attribute dependency cycle detected: first -> second -> first.",
+    );
+  });
+
   test("applies traits before final attribute overrides", () => {
     const server = createUserServer();
 

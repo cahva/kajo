@@ -40,8 +40,9 @@ and this project adheres to
   collections and normalized JSON request bodies.
 - Runnable vanilla TypeScript task-board example covering browser interception,
   relationships, serializers, a CRUD resource, and custom handlers.
-- Typed factories with sequences, dependent attributes, traits, overrides, and
-  list creation.
+- Typed factories with sequences, order-independent dependent attributes,
+  single evaluation, dependency-cycle diagnostics, traits, overrides, and list
+  creation.
 - Typed `loadFixtures()` support for restoring all configured fixtures or a
   selected set of fixture collections.
 - Base and trait-specific factory `afterCreate` hooks.

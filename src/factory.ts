@@ -25,8 +25,8 @@ export type FactoryAttribute<Attributes extends object, Name extends keyof Attri
 /**
  * Base or trait attributes used to build a model.
  *
- * Function attributes receive a zero-based sequence and can read attributes
- * evaluated before them through `this`.
+ * Function attributes receive a zero-based sequence and can read any other
+ * attribute through `this`, regardless of declaration order.
  */
 export type FactoryDefinition<
   Attributes extends object,
@@ -106,6 +106,7 @@ export class Factory<
 
     const afterCreate: FactoryAfterCreate<Created, Context>[] = [];
     const attributes: Record<string, unknown> = { ...overrides };
+    const attributeDefinitions = new Map<string, unknown>();
 
     for (const definition of definitions) {
       for (const [name, value] of Object.entries(definition)) {
@@ -118,9 +119,54 @@ export class Factory<
           continue;
         }
 
-        attributes[name] =
-          typeof value === "function" ? Reflect.apply(value, attributes, [sequence]) : value;
+        attributeDefinitions.set(name, value);
       }
+    }
+
+    const resolving: string[] = [];
+    const context = new Proxy(attributes, {
+      get(target, property, receiver) {
+        if (
+          typeof property === "string" &&
+          attributeDefinitions.has(property) &&
+          !Object.prototype.hasOwnProperty.call(target, property)
+        ) {
+          resolve(property);
+        }
+
+        return Reflect.get(target, property, receiver);
+      },
+    });
+
+    const resolve = (name: string): void => {
+      if (Object.prototype.hasOwnProperty.call(attributes, name)) {
+        return;
+      }
+
+      const cycleStart = resolving.indexOf(name);
+
+      if (cycleStart !== -1) {
+        throw new Error(
+          `Factory attribute dependency cycle detected: ${[
+            ...resolving.slice(cycleStart),
+            name,
+          ].join(" -> ")}.`,
+        );
+      }
+
+      resolving.push(name);
+
+      try {
+        const value = attributeDefinitions.get(name);
+        attributes[name] =
+          typeof value === "function" ? Reflect.apply(value, context, [sequence]) : value;
+      } finally {
+        resolving.pop();
+      }
+    };
+
+    for (const name of attributeDefinitions.keys()) {
+      resolve(name);
     }
 
     return {

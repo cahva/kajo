@@ -72,12 +72,12 @@ change before the first stable version.
 | Mirage capability                                 | Kajo status   | Notes                                                                                         |
 | ------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------- |
 | Static and sequence attributes                    | **Supported** | Sequences are scoped to each server.                                                          |
-| Dependent attributes                              | **Supported** | Factory functions can read attributes evaluated before them through `this`.                   |
+| Dependent attributes                              | **Supported** | Factory functions lazily resolve any other attribute through `this`.                          |
 | Traits and final overrides                        | **Supported** | Invalid traits and argument order have explicit errors.                                       |
 | Base and trait `afterCreate` hooks                | **Supported** | Hooks receive typed models and a server context.                                              |
 | `association()`                                   | **Supported** | Belongs-to targets are inferred from model definitions; traits and caller overrides work.     |
 | `create` and `createList`                         | **Supported** | Return model types inferred from the model registry.                                          |
-| Automatic dependency ordering and cycle detection | **Partial**   | Association cycles are diagnosed; arbitrary dependent-attribute ordering is not yet resolved. |
+| Automatic dependency ordering and cycle detection | **Supported** | Attributes evaluate once in dependency order; attribute and association cycles are diagnosed. |
 | Fixtures and seeds                                | **Supported** | Fixtures initialize collections and seeds can build additional state.                         |
 | Selective `loadFixtures()`                        | **Supported** | Loads all configured fixtures or a typed collection-name subset.                              |
 
@@ -114,15 +114,15 @@ These are behavioral inputs, not commitments to preserve Mirage internals.
 | Mirage issue                                                                                             | Kajo behavior                                                                                                        |
 | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | [#191: traits, `afterCreate`, and factory associations](https://github.com/miragejs/miragejs/issues/191) | Declarative associations run before creation, and explicit caller relationships take precedence.                     |
+| [Discuss #38: dynamic attributes evaluated twice](https://github.com/miragejs/discuss/issues/38)         | Lazy dependency resolution evaluates each factory attribute exactly once.                                            |
 | [#771: missing typed `handledRequests`](https://github.com/miragejs/miragejs/issues/771)                 | Request history is a first-class typed Kajo API.                                                                     |
 | [#1056: observing requests without replacing handlers](https://github.com/miragejs/miragejs/issues/1056) | Typed logger callbacks and tracked request history observe existing routes without changing them.                    |
 | Unrelated traffic intercepted globally                                                                   | Ownership is derived from registered route origins and namespaces; unrelated origins and paths bypass automatically. |
 
 ## Prioritized compatibility work
 
-1. Finish factory dependency ordering.
-2. Add request normalization helpers and decide coalesced request behavior.
-3. Add polymorphic `hasMany` if issue research demonstrates a current use case.
-4. Expand the issue-driven regression suite before declaring a stable API.
+1. Add request normalization helpers and decide coalesced request behavior.
+2. Add polymorphic `hasMany` if issue research demonstrates a current use case.
+3. Expand the issue-driven regression suite before declaring a stable API.
 
 OpenAPI integration starts after this compatibility foundation is stable.
