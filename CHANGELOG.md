@@ -17,5 +17,7 @@ and this project adheres to
 - Global and per-route response timing.
 - Runtime-independent request handling, passthrough, and server shutdown.
 - Automatic Fetch and XMLHttpRequest interception with network passthrough.
+- Typed in-memory collections with fixtures, seeds, generated IDs, queries,
+  mutations, and reset behavior.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD

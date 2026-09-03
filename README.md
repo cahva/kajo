@@ -33,13 +33,14 @@ or XMLHttpRequest:
 import { createServer } from "@cahva/kajo";
 
 const server = createServer({
+  fixtures: {
+    movies: [{ title: "Arrival" }],
+  },
+
   routes() {
     this.namespace = "api";
 
-    this.get("/movies/:id", (_schema, request) => ({
-      id: request.params.id,
-      title: "Arrival",
-    }));
+    this.get("/movies/:id", (schema, request) => schema.db.movies.find(request.params.id));
   },
 });
 
@@ -49,8 +50,10 @@ await response.json(); // { id: "1", title: "Arrival" }
 server.shutdown();
 ```
 
-The data-layer argument is reserved for the typed schema and model APIs that
-are still under development.
+Fixture types flow through `server.db` and the schema passed to route handlers.
+Collections assign string IDs and support `find`, `findBy`, `where`, `insert`,
+`firstOrCreate`, `update`, and `remove`. Use `loadData`, `emptyData`, and
+`dump` to manage the database as a whole.
 
 ## Principles
 

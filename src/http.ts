@@ -1,3 +1,5 @@
+import type { Database, DatabaseData } from "./database.ts";
+
 /**
  * A JSON value that can be returned directly from a route handler.
  */
@@ -28,12 +30,14 @@ export interface KajoRequest {
 }
 
 /**
- * Placeholder for Kajo's typed data layer.
+ * Data available to route handlers.
  *
- * The HTTP foundation exposes this now to preserve the route-handler shape
- * while the schema and model APIs are built.
+ * Models and relationships will extend this schema beyond its low-level
+ * database.
  */
-export type Schema = Readonly<Record<string, never>>;
+export interface Schema<Tables extends DatabaseData = DatabaseData> {
+  readonly db: Database<Tables>;
+}
 
 /**
  * A value Kajo can turn into an HTTP response.
@@ -43,15 +47,18 @@ export type RouteResult = JsonValue | Response | undefined;
 /**
  * Produces a response for a matched request.
  */
-export type RouteHandler = (
-  schema: Schema,
+export type RouteHandler<Tables extends DatabaseData = DatabaseData> = (
+  schema: Schema<Tables>,
   request: KajoRequest,
 ) => RouteResult | Promise<RouteResult>;
 
 /**
  * A route handler or a static JSON response.
  */
-export type RouteResponder = JsonValue | Response | RouteHandler;
+export type RouteResponder<Tables extends DatabaseData = DatabaseData> =
+  | JsonValue
+  | Response
+  | RouteHandler<Tables>;
 
 /**
  * Per-route behavior.

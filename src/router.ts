@@ -1,3 +1,4 @@
+import type { DatabaseData } from "./database.ts";
 import type { RouteOptions, RouteResponder } from "./http.ts";
 
 interface RouteSegment {
@@ -5,23 +6,28 @@ interface RouteSegment {
   readonly value: string;
 }
 
-export interface Route {
+export interface Route<Tables extends DatabaseData = DatabaseData> {
   readonly method: string;
   readonly path: string;
-  readonly responder: RouteResponder;
+  readonly responder: RouteResponder<Tables>;
   readonly segments: readonly RouteSegment[];
   readonly options: RouteOptions;
 }
 
-export interface RouteMatch {
-  readonly route: Route;
+export interface RouteMatch<Tables extends DatabaseData = DatabaseData> {
+  readonly route: Route<Tables>;
   readonly params: Readonly<Record<string, string>>;
 }
 
-export class Router {
-  readonly #routes: Route[] = [];
+export class Router<Tables extends DatabaseData = DatabaseData> {
+  readonly #routes: Route<Tables>[] = [];
 
-  add(method: string, path: string, responder: RouteResponder, options: RouteOptions): void {
+  add(
+    method: string,
+    path: string,
+    responder: RouteResponder<Tables>,
+    options: RouteOptions,
+  ): void {
     const normalizedPath = normalizePath(path);
 
     this.#routes.push({
@@ -33,9 +39,9 @@ export class Router {
     });
   }
 
-  match(method: string, path: string): RouteMatch | undefined {
+  match(method: string, path: string): RouteMatch<Tables> | undefined {
     const requestSegments = splitPath(normalizePath(path));
-    let bestMatch: (RouteMatch & { readonly staticSegmentCount: number }) | undefined;
+    let bestMatch: (RouteMatch<Tables> & { readonly staticSegmentCount: number }) | undefined;
 
     for (const route of this.#routes) {
       if (

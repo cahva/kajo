@@ -1,3 +1,4 @@
+import { createDatabase, type Database, type DatabaseData } from "./database.ts";
 import type {
   JsonValue,
   KajoRequest,
@@ -9,8 +10,6 @@ import type {
 import { interceptRequests, type NetworkInterceptor } from "./interceptor.ts";
 import { joinPaths, Router } from "./router.ts";
 
-const EMPTY_SCHEMA: Schema = Object.freeze({});
-
 const HTTP_METHODS = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"] as const;
 
 type HttpMethod = (typeof HTTP_METHODS)[number];
@@ -18,20 +17,24 @@ type HttpMethod = (typeof HTTP_METHODS)[number];
 /**
  * Configuration used to create a Kajo server.
  */
-export interface ServerOptions {
+export interface ServerOptions<Tables extends DatabaseData = DatabaseData> {
   /** Register the server's HTTP routes. */
-  readonly routes?: (this: Server) => void;
+  readonly routes?: (this: Server<Tables>) => void;
   /** Default response delay in milliseconds. */
   readonly timing?: number;
   /** Whether to intercept Fetch and XMLHttpRequest traffic. */
   readonly intercept?: boolean;
+  /** Initial records, grouped by collection name. */
+  readonly fixtures?: Tables;
+  /** Initialize additional application data. */
+  readonly seeds?: (server: Server<Tables>) => void;
 }
 
 /**
  * An in-memory API server.
  */
-export class Server {
-  readonly #router = new Router();
+export class Server<Tables extends DatabaseData = DatabaseData> {
+  readonly #router = new Router<Tables>();
   #interceptor: NetworkInterceptor | undefined;
   #isRunning = true;
 
@@ -41,8 +44,16 @@ export class Server {
   /** Default response delay in milliseconds. */
   timing: number;
 
-  constructor(options: Omit<ServerOptions, "routes"> = {}) {
+  /** The server's typed in-memory database. */
+  readonly db: Database<Tables>;
+
+  /** Data available to route handlers. */
+  readonly schema: Schema<Tables>;
+
+  constructor(options: Omit<ServerOptions<Tables>, "routes" | "seeds"> = {}) {
     this.timing = options.timing ?? 0;
+    this.db = createDatabase(options.fixtures);
+    this.schema = Object.freeze({ db: this.db });
 
     if (options.intercept !== false) {
       this.#interceptor = interceptRequests((request) => this.handle(request));
@@ -68,7 +79,7 @@ export class Server {
     }
 
     const routeRequest = await createRouteRequest(request, match.params, url);
-    const result = await resolveResponder(match.route.responder, routeRequest);
+    const result = await resolveResponder(match.route.responder, routeRequest, this.schema);
     const timing = match.route.options.timing ?? this.timing;
 
     if (timing > 0) {
@@ -85,42 +96,42 @@ export class Server {
     this.#isRunning = false;
   }
 
-  delete(path: string, responder: RouteResponder, options: RouteOptions = {}): void {
+  delete(path: string, responder: RouteResponder<Tables>, options: RouteOptions = {}): void {
     this.#register("DELETE", path, responder, options);
   }
 
-  del(path: string, responder: RouteResponder, options: RouteOptions = {}): void {
+  del(path: string, responder: RouteResponder<Tables>, options: RouteOptions = {}): void {
     this.delete(path, responder, options);
   }
 
-  get(path: string, responder: RouteResponder, options: RouteOptions = {}): void {
+  get(path: string, responder: RouteResponder<Tables>, options: RouteOptions = {}): void {
     this.#register("GET", path, responder, options);
   }
 
-  head(path: string, responder: RouteResponder, options: RouteOptions = {}): void {
+  head(path: string, responder: RouteResponder<Tables>, options: RouteOptions = {}): void {
     this.#register("HEAD", path, responder, options);
   }
 
-  options(path: string, responder: RouteResponder, options: RouteOptions = {}): void {
+  options(path: string, responder: RouteResponder<Tables>, options: RouteOptions = {}): void {
     this.#register("OPTIONS", path, responder, options);
   }
 
-  patch(path: string, responder: RouteResponder, options: RouteOptions = {}): void {
+  patch(path: string, responder: RouteResponder<Tables>, options: RouteOptions = {}): void {
     this.#register("PATCH", path, responder, options);
   }
 
-  post(path: string, responder: RouteResponder, options: RouteOptions = {}): void {
+  post(path: string, responder: RouteResponder<Tables>, options: RouteOptions = {}): void {
     this.#register("POST", path, responder, options);
   }
 
-  put(path: string, responder: RouteResponder, options: RouteOptions = {}): void {
+  put(path: string, responder: RouteResponder<Tables>, options: RouteOptions = {}): void {
     this.#register("PUT", path, responder, options);
   }
 
   #register(
     method: HttpMethod,
     path: string,
-    responder: RouteResponder,
+    responder: RouteResponder<Tables>,
     options: RouteOptions,
   ): void {
     this.#router.add(method, joinPaths(this.namespace, path), responder, options);
@@ -130,12 +141,16 @@ export class Server {
 /**
  * Create and configure an in-memory API server.
  */
-export function createServer(options: ServerOptions = {}): Server {
-  const server = new Server({
+export function createServer<Tables extends DatabaseData = DatabaseData>(
+  options: ServerOptions<Tables> = {},
+): Server<Tables> {
+  const server = new Server<Tables>({
+    fixtures: options.fixtures,
     intercept: options.intercept,
     timing: options.timing,
   });
   options.routes?.call(server);
+  options.seeds?.(server);
   return server;
 }
 
@@ -154,12 +169,13 @@ async function createRouteRequest(
   };
 }
 
-async function resolveResponder(
-  responder: RouteResponder,
+async function resolveResponder<Tables extends DatabaseData>(
+  responder: RouteResponder<Tables>,
   request: KajoRequest,
+  schema: Schema<Tables>,
 ): Promise<JsonValue | Response | undefined> {
   if (typeof responder === "function") {
-    return (responder as RouteHandler)(EMPTY_SCHEMA, request);
+    return (responder as RouteHandler<Tables>)(schema, request);
   }
 
   return responder instanceof Response ? responder.clone() : responder;
