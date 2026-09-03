@@ -128,6 +128,9 @@ interface User {
 
 const userFactory = Factory.extend<User>({
   active: true,
+  afterCreate(user) {
+    console.log(`Created ${user.id}`);
+  },
   name: (sequence) => `User ${sequence}`,
   role: "member",
   admin: trait<User>({ role: "admin" }),

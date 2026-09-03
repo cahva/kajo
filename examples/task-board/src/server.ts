@@ -6,7 +6,9 @@ import {
   Factory,
   hasMany,
   model,
+  type ModelFor,
   Serializer,
+  type Server,
   trait,
 } from "../../../src/index.ts";
 
@@ -21,9 +23,24 @@ interface User {
   name: string;
 }
 
+const models = {
+  task: model<Task>().extend({
+    assignee: belongsTo("user"),
+  }),
+  user: model<User>().extend({
+    tasks: hasMany("task"),
+  }),
+};
+
+type TaskBoardServer = Server<{}, typeof models>;
+type TaskModel = ModelFor<typeof models, "task">;
+
 export const server = createServer({
   factories: {
-    task: Factory.extend<Task>({
+    task: Factory.extend<Task, TaskModel, TaskBoardServer>({
+      afterCreate(task, server) {
+        task.assignee ??= server.schema.users.first();
+      },
       status: "backlog",
       title(sequence) {
         return ["Design empty states", "Model task relationships", "Wire up request interception"][
@@ -44,14 +61,7 @@ export const server = createServer({
     }),
   },
 
-  models: {
-    task: model<Task>().extend({
-      assignee: belongsTo("user"),
-    }),
-    user: model<User>().extend({
-      tasks: hasMany("task"),
-    }),
-  },
+  models,
 
   serializers: {
     task: Serializer.extend({
@@ -60,11 +70,11 @@ export const server = createServer({
   },
 
   seeds(server) {
-    const [ada, linus, margaret] = server.createList("user", 3);
+    const [, linus, margaret] = server.createList("user", 3);
 
-    server.create("task", { assignee: margaret });
-    server.create("task", "started", { assignee: ada });
-    server.create("task", "completed", { assignee: linus });
+    server.create("task");
+    server.create("task", "started", { assignee: linus });
+    server.create("task", "completed", { assignee: margaret });
   },
 
   routes() {

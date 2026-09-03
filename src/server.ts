@@ -1,5 +1,5 @@
 import { createDatabase, type Database, type DatabaseData } from "./database.ts";
-import type { Factory } from "./factory.ts";
+import type { Factory, FactoryAfterCreate, FactoryModel, FactoryServer } from "./factory.ts";
 import type {
   JsonSerializable,
   JsonValue,
@@ -34,7 +34,7 @@ type ServerTables<Fixtures extends DatabaseData, Models extends ModelRegistry> =
   ModelTables<Models>;
 
 export type FactoryRegistry<Models extends ModelRegistry> = {
-  readonly [Name in keyof Models]?: Factory<ModelAttributes<Models[Name]>>;
+  readonly [Name in keyof Models]?: Factory<ModelAttributes<Models[Name]>, never, never>;
 };
 
 export interface ServerOptions<
@@ -119,7 +119,8 @@ export class Server<
       throw new Error(`Cannot apply traits without a "${modelName}" factory.`);
     }
 
-    const attributes = factory ? factory.build(sequence, traits, overrides).attributes : overrides;
+    const build = factory?.build(sequence, traits, overrides);
+    const attributes = build?.attributes ?? overrides;
     const collection = Reflect.get(this.schema, pluralize(modelName));
 
     if (
@@ -134,6 +135,19 @@ export class Server<
       attributes,
     ]) as ModelFor<Models, Name>;
     this.#factorySequences.set(modelName, sequence + 1);
+
+    for (const afterCreate of build?.afterCreate ?? []) {
+      (
+        afterCreate as FactoryAfterCreate<
+          FactoryModel<ModelAttributes<Models[Name]>>,
+          FactoryServer
+        >
+      )(
+        created as unknown as FactoryModel<ModelAttributes<Models[Name]>>,
+        this as unknown as FactoryServer,
+      );
+    }
+
     return created;
   }
 

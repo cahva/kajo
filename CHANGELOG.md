@@ -31,6 +31,7 @@ and this project adheres to
   relationships, serializers, custom handlers, and CRUD shorthands.
 - Typed factories with sequences, dependent attributes, traits, overrides, and
   list creation.
+- Base and trait-specific factory `afterCreate` hooks.
 
 ### Fixed
 

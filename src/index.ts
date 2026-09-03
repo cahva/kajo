@@ -18,7 +18,15 @@ export type {
   UpdateAttributes,
 } from "./database.ts";
 export { Factory, trait } from "./factory.ts";
-export type { FactoryAttribute, FactoryBuild, FactoryDefinition, FactoryTrait } from "./factory.ts";
+export type {
+  FactoryAfterCreate,
+  FactoryAttribute,
+  FactoryBuild,
+  FactoryDefinition,
+  FactoryModel,
+  FactoryServer,
+  FactoryTrait,
+} from "./factory.ts";
 export type {
   JsonSerializable,
   JsonValue,
