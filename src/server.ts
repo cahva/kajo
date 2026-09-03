@@ -1,12 +1,13 @@
 import { createDatabase, type Database, type DatabaseData } from "./database.ts";
 import type { Factory, FactoryAfterCreate, FactoryModel, FactoryServer } from "./factory.ts";
-import type {
-  JsonSerializable,
-  JsonValue,
-  KajoRequest,
-  RouteHandler,
-  RouteOptions,
-  RouteResponder,
+import {
+  HttpError,
+  type JsonSerializable,
+  type JsonValue,
+  type KajoRequest,
+  type RouteHandler,
+  type RouteOptions,
+  type RouteResponder,
 } from "./http.ts";
 import { interceptRequests, type NetworkInterceptor } from "./interceptor.ts";
 import {
@@ -196,7 +197,18 @@ export class Server<
     }
 
     const routeRequest = await createRouteRequest(request, match.params, url);
-    const result = await resolveResponder(match.route.responder, routeRequest, this.schema);
+    let result: JsonSerializable | JsonValue | Response | undefined;
+
+    try {
+      result = await resolveResponder(match.route.responder, routeRequest, this.schema);
+    } catch (error) {
+      if (!(error instanceof HttpError)) {
+        throw error;
+      }
+
+      result = Response.json({ error: error.message }, { status: error.status });
+    }
+
     const timing = match.route.options.timing ?? this.timing;
 
     if (timing > 0) {

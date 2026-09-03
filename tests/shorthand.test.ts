@@ -98,6 +98,31 @@ describe("route shorthands", () => {
     await expect(response?.text()).resolves.toBe("");
     expect(server.schema.movies.find("1")).toBeNull();
   });
+
+  test("returns 404 responses when a model does not exist", async () => {
+    const server = createMovieServer();
+    const response = await server.handle(new Request("https://example.test/movies/missing"));
+
+    expect(response?.status).toBe(404);
+    await expect(response?.json()).resolves.toEqual({
+      error: 'No movie with id "missing" was found.',
+    });
+  });
+
+  test("returns 400 responses for malformed request JSON", async () => {
+    const server = createMovieServer();
+    const response = await server.handle(
+      new Request("https://example.test/movies", {
+        body: "{",
+        method: "POST",
+      }),
+    );
+
+    expect(response?.status).toBe(400);
+    await expect(response?.json()).resolves.toEqual({
+      error: "The POST shorthand expected a JSON request body.",
+    });
+  });
 });
 
 describe("resource routes", () => {

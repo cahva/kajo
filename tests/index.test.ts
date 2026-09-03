@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { createServer } from "../src/index.ts";
+import { createServer, HttpError } from "../src/index.ts";
 
 test("handles static JSON responses", async () => {
   const server = createServer({
@@ -89,6 +89,25 @@ test("returns undefined for unmatched requests and after shutdown", async () => 
   server.shutdown();
 
   await expect(server.handle(new Request("https://example.test/movies"))).resolves.toBeUndefined();
+});
+
+test("turns expected HTTP errors into JSON responses", async () => {
+  const server = createServer({
+    intercept: false,
+    routes() {
+      this.get("/restricted", () => {
+        throw new HttpError(403, "Access denied.");
+      });
+    },
+  });
+
+  const response = await server.handle(new Request("https://example.test/restricted"));
+
+  expect(response?.status).toBe(403);
+  await expect(response?.json()).resolves.toEqual({ error: "Access denied." });
+  expect(() => new HttpError(200, "Not an error.")).toThrow(
+    "HTTP error status must be an integer from 400 through 599.",
+  );
 });
 
 test("intercepts matching fetch requests and passes through unmatched requests", async () => {

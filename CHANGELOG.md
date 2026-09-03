@@ -33,6 +33,8 @@ and this project adheres to
   list creation.
 - Base and trait-specific factory `afterCreate` hooks.
 - `resource()` route helper with action filters and custom paths.
+- Structured JSON responses for expected `HttpError` failures, including
+  shorthand `400` and `404` responses.
 
 ### Fixed
 

@@ -2,6 +2,23 @@ import type { DatabaseData } from "./database.ts";
 import type { ModelRegistry, Schema } from "./model.ts";
 
 /**
+ * An expected HTTP failure that route handlers can return by throwing.
+ */
+export class HttpError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    if (!Number.isInteger(status) || status < 400 || status > 599) {
+      throw new RangeError("HTTP error status must be an integer from 400 through 599.");
+    }
+
+    super(message);
+    this.name = "HttpError";
+    this.status = status;
+  }
+}
+
+/**
  * A JSON value that can be returned directly from a route handler.
  */
 export type JsonValue =

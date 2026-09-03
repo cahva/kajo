@@ -27,6 +27,7 @@ export type {
   FactoryServer,
   FactoryTrait,
 } from "./factory.ts";
+export { HttpError } from "./http.ts";
 export type {
   JsonSerializable,
   JsonValue,

@@ -30,7 +30,16 @@ Kajo can register typed route handlers and intercept requests made with Fetch
 or XMLHttpRequest:
 
 ```ts
-import { belongsTo, createServer, Factory, hasMany, model, Serializer, trait } from "@cahva/kajo";
+import {
+  belongsTo,
+  createServer,
+  Factory,
+  hasMany,
+  HttpError,
+  model,
+  Serializer,
+  trait,
+} from "@cahva/kajo";
 
 interface Movie {
   title: string;
@@ -127,6 +136,10 @@ createServer({
   },
 });
 ```
+
+Missing shorthand records return `404`, malformed shorthand payloads return
+`400`, and custom handlers can throw `new HttpError(status, message)` for
+expected JSON error responses.
 
 Factories generate realistic model data with sequences, dependent attributes,
 traits, and final overrides:

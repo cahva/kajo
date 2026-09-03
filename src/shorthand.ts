@@ -1,5 +1,11 @@
 import type { DatabaseData } from "./database.ts";
-import type { JsonSerializable, KajoRequest, RouteHandler, RouteResult } from "./http.ts";
+import {
+  HttpError,
+  type JsonSerializable,
+  type KajoRequest,
+  type RouteHandler,
+  type RouteResult,
+} from "./http.ts";
 import { pluralize, type ModelRegistry, type Schema } from "./model.ts";
 
 export type ShorthandMethod = "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
@@ -32,16 +38,16 @@ export function createShorthandHandler<Tables extends DatabaseData, Models exten
 
     switch (method) {
       case "GET":
-        return request.params.id ? collection.find(request.params.id) : collection.all();
+        return request.params.id ? findModel(collection, request.params.id) : collection.all();
       case "POST":
         return collection.create(requestAttributes(request, collection.modelName));
       case "PATCH":
       case "PUT":
-        return collection
-          .find(requireId(request, method))
-          ?.update(requestAttributes(request, collection.modelName));
+        return findModel(collection, requireId(request, method)).update(
+          requestAttributes(request, collection.modelName),
+        );
       case "DELETE":
-        collection.find(requireId(request, method))?.destroy();
+        findModel(collection, requireId(request, method)).destroy();
         return undefined;
     }
   };
@@ -101,24 +107,34 @@ function requestAttributes(request: KajoRequest, modelName: string): object {
   try {
     payload = JSON.parse(request.requestBody);
   } catch {
-    throw new SyntaxError(`The ${request.method} shorthand expected a JSON request body.`);
+    throw new HttpError(400, `The ${request.method} shorthand expected a JSON request body.`);
   }
 
   if (!isRecord(payload)) {
-    throw new TypeError(`The ${request.method} shorthand expected a JSON object.`);
+    throw new HttpError(400, `The ${request.method} shorthand expected a JSON object.`);
   }
 
   const rootedAttributes = payload[modelName];
 
   if (rootedAttributes !== undefined) {
     if (!isRecord(rootedAttributes)) {
-      throw new TypeError(`The "${modelName}" request root must contain a JSON object.`);
+      throw new HttpError(400, `The "${modelName}" request root must contain a JSON object.`);
     }
 
     return rootedAttributes;
   }
 
   return payload;
+}
+
+function findModel(collection: RuntimeCollection, id: string): RuntimeModel {
+  const model = collection.find(id);
+
+  if (!model) {
+    throw new HttpError(404, `No ${collection.modelName} with id "${id}" was found.`);
+  }
+
+  return model;
 }
 
 function requireId(request: KajoRequest, method: ShorthandMethod): string {
