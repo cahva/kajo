@@ -30,7 +30,7 @@ Kajo can register typed route handlers and intercept requests made with Fetch
 or XMLHttpRequest:
 
 ```ts
-import { belongsTo, createServer, hasMany, model, Serializer } from "@cahva/kajo";
+import { belongsTo, createServer, Factory, hasMany, model, Serializer, trait } from "@cahva/kajo";
 
 interface Movie {
   title: string;
@@ -112,6 +112,33 @@ createServer({
     this.post("/posts");
     this.patch("/posts/:id");
     this.del("/posts/:id");
+  },
+});
+```
+
+Factories generate realistic model data with sequences, dependent attributes,
+traits, and final overrides:
+
+```ts
+interface User {
+  active: boolean;
+  name: string;
+  role: "admin" | "member";
+}
+
+const userFactory = Factory.extend<User>({
+  active: true,
+  name: (sequence) => `User ${sequence}`,
+  role: "member",
+  admin: trait<User>({ role: "admin" }),
+});
+
+createServer({
+  factories: { user: userFactory },
+  models: { user: model<User>() },
+  seeds(server) {
+    server.createList("user", 5);
+    server.create("user", "admin", { name: "Ada" });
   },
 });
 ```

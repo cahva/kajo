@@ -1,4 +1,14 @@
-import { belongsTo, createServer, hasMany, model, Serializer } from "@cahva/kajo";
+/// <reference types="vite/client" />
+
+import {
+  belongsTo,
+  createServer,
+  Factory,
+  hasMany,
+  model,
+  Serializer,
+  trait,
+} from "../../../src/index.ts";
 
 export type TaskStatus = "backlog" | "in-progress" | "done";
 
@@ -12,6 +22,28 @@ interface User {
 }
 
 export const server = createServer({
+  factories: {
+    task: Factory.extend<Task>({
+      status: "backlog",
+      title(sequence) {
+        return ["Design empty states", "Model task relationships", "Wire up request interception"][
+          sequence % 3
+        ]!;
+      },
+      completed: trait<Task>({
+        status: "done",
+      }),
+      started: trait<Task>({
+        status: "in-progress",
+      }),
+    }),
+    user: Factory.extend<User>({
+      name(sequence) {
+        return ["Ada", "Linus", "Margaret"][sequence % 3]!;
+      },
+    }),
+  },
+
   models: {
     task: model<Task>().extend({
       assignee: belongsTo("user"),
@@ -28,25 +60,11 @@ export const server = createServer({
   },
 
   seeds(server) {
-    const ada = server.schema.users.create({ name: "Ada" });
-    const linus = server.schema.users.create({ name: "Linus" });
-    const margaret = server.schema.users.create({ name: "Margaret" });
+    const [ada, linus, margaret] = server.createList("user", 3);
 
-    server.schema.tasks.create({
-      assignee: margaret,
-      status: "backlog",
-      title: "Design empty states",
-    });
-    server.schema.tasks.create({
-      assignee: ada,
-      status: "in-progress",
-      title: "Model task relationships",
-    });
-    server.schema.tasks.create({
-      assignee: linus,
-      status: "done",
-      title: "Wire up request interception",
-    });
+    server.create("task", { assignee: margaret });
+    server.create("task", "started", { assignee: ada });
+    server.create("task", "completed", { assignee: linus });
   },
 
   routes() {

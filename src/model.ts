@@ -114,7 +114,7 @@ function createModelDefinition<
   });
 }
 
-type ModelFor<Models extends ModelRegistry, Name extends string> = Name extends keyof Models
+export type ModelFor<Models extends ModelRegistry, Name extends string> = Name extends keyof Models
   ? Model<ModelAttributes<Models[Name]>, Models, ModelRelationships<Models[Name]>>
   : Model<object, Models>;
 
@@ -208,6 +208,11 @@ type CreateModelAttributes<
   Models extends ModelRegistry,
   Relationships extends RelationshipRegistry,
 > = InsertableRecord<Attributes> & RelationshipInputs<Models, Relationships>;
+
+export type ModelCreateInput<
+  Models extends ModelRegistry,
+  Name extends keyof Models,
+> = CreateModelAttributes<ModelAttributes<Models[Name]>, Models, ModelRelationships<Models[Name]>>;
 
 /**
  * Creates and queries model instances in one database collection.

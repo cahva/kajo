@@ -240,10 +240,6 @@ importers:
         version: 0.3.0(@types/node@26.4.1)(@voidzero-dev/vite-plus-core@0.3.0(@types/node@26.4.1)(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.0))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.0)
 
   examples/task-board:
-    dependencies:
-      '@cahva/kajo':
-        specifier: workspace:*
-        version: link:../..
     devDependencies:
       '@types/node':
         specifier: ^26.1.1

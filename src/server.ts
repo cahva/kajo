@@ -1,4 +1,5 @@
 import { createDatabase, type Database, type DatabaseData } from "./database.ts";
+import type { Factory } from "./factory.ts";
 import type {
   JsonSerializable,
   JsonValue,
@@ -10,6 +11,9 @@ import type {
 import { interceptRequests, type NetworkInterceptor } from "./interceptor.ts";
 import {
   createSchema,
+  type ModelAttributes,
+  type ModelCreateInput,
+  type ModelFor,
   type ModelRegistry,
   type ModelTables,
   pluralize,
@@ -29,6 +33,10 @@ type HttpMethod = (typeof HTTP_METHODS)[number];
 type ServerTables<Fixtures extends DatabaseData, Models extends ModelRegistry> = Fixtures &
   ModelTables<Models>;
 
+export type FactoryRegistry<Models extends ModelRegistry> = {
+  readonly [Name in keyof Models]?: Factory<ModelAttributes<Models[Name]>>;
+};
+
 export interface ServerOptions<
   Fixtures extends DatabaseData = DatabaseData,
   Models extends ModelRegistry = {},
@@ -41,6 +49,8 @@ export interface ServerOptions<
   readonly intercept?: boolean;
   /** Initial records, grouped by collection name. */
   readonly fixtures?: Fixtures;
+  /** Factory definitions, keyed by singular model name. */
+  readonly factories?: FactoryRegistry<Models>;
   /** Model definitions, keyed by singular model name. */
   readonly models?: Models;
   /** Initialize additional application data. */
@@ -58,6 +68,8 @@ export class Server<
 > {
   readonly #router = new Router<ServerTables<Fixtures, Models>, Models>();
   readonly #serializers: SerializerRegistry;
+  readonly #factories: FactoryRegistry<Models>;
+  readonly #factorySequences = new Map<string, number>();
   #interceptor: NetworkInterceptor | undefined;
   #isRunning = true;
 
@@ -76,6 +88,7 @@ export class Server<
   constructor(options: Omit<ServerOptions<Fixtures, Models>, "routes" | "seeds"> = {}) {
     this.timing = options.timing ?? 0;
     this.#serializers = options.serializers ?? {};
+    this.#factories = options.factories ?? {};
     this.db = createDatabase(options.fixtures) as Database<ServerTables<Fixtures, Models>>;
 
     for (const modelName of Object.keys(options.models ?? {})) {
@@ -88,6 +101,55 @@ export class Server<
     if (options.intercept !== false) {
       this.#interceptor = interceptRequests((request) => this.handle(request));
     }
+  }
+
+  /**
+   * Create one model, optionally applying factory traits and attribute
+   * overrides.
+   */
+  create<Name extends keyof Models & string>(
+    modelName: Name,
+    ...traitsAndOverrides: readonly (string | Partial<ModelCreateInput<Models, Name>>)[]
+  ): ModelFor<Models, Name> {
+    const { overrides, traits } = factoryArguments(traitsAndOverrides);
+    const factory = this.#factories[modelName];
+    const sequence = this.#factorySequences.get(modelName) ?? 0;
+
+    if (!factory && traits.length > 0) {
+      throw new Error(`Cannot apply traits without a "${modelName}" factory.`);
+    }
+
+    const attributes = factory ? factory.build(sequence, traits, overrides).attributes : overrides;
+    const collection = Reflect.get(this.schema, pluralize(modelName));
+
+    if (
+      typeof collection !== "object" ||
+      collection === null ||
+      typeof Reflect.get(collection, "create") !== "function"
+    ) {
+      throw new Error(`Model "${modelName}" does not have a schema collection.`);
+    }
+
+    const created = Reflect.apply(Reflect.get(collection, "create"), collection, [
+      attributes,
+    ]) as ModelFor<Models, Name>;
+    this.#factorySequences.set(modelName, sequence + 1);
+    return created;
+  }
+
+  /**
+   * Create several models from the same factory, traits, and overrides.
+   */
+  createList<Name extends keyof Models & string>(
+    modelName: Name,
+    count: number,
+    ...traitsAndOverrides: readonly (string | Partial<ModelCreateInput<Models, Name>>)[]
+  ): ModelFor<Models, Name>[] {
+    if (!Number.isInteger(count) || count < 0) {
+      throw new RangeError("Factory list count must be a non-negative integer.");
+    }
+
+    return Array.from({ length: count }, () => this.create(modelName, ...traitsAndOverrides));
   }
 
   /**
@@ -236,6 +298,7 @@ export function createServer<Fixtures extends DatabaseData = {}, Models extends 
   options: ServerOptions<Fixtures, Models> = {},
 ): Server<Fixtures, Models> {
   const server = new Server<Fixtures, Models>({
+    factories: options.factories,
     fixtures: options.fixtures,
     intercept: options.intercept,
     models: options.models,
@@ -245,6 +308,35 @@ export function createServer<Fixtures extends DatabaseData = {}, Models extends 
   options.routes?.call(server);
   options.seeds?.(server);
   return server;
+}
+
+function factoryArguments(args: readonly (object | string)[]): {
+  overrides: Record<string, unknown>;
+  traits: string[];
+} {
+  const traits: string[] = [];
+  let overrides: Record<string, unknown> = {};
+  let hasOverrides = false;
+
+  for (const argument of args) {
+    if (typeof argument === "string") {
+      if (hasOverrides) {
+        throw new TypeError("Factory traits must be listed before attribute overrides.");
+      }
+
+      traits.push(argument);
+      continue;
+    }
+
+    if (hasOverrides || Array.isArray(argument)) {
+      throw new TypeError("A factory accepts at most one attribute override object.");
+    }
+
+    overrides = { ...argument };
+    hasOverrides = true;
+  }
+
+  return { overrides, traits };
 }
 
 async function createRouteRequest(

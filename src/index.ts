@@ -17,6 +17,8 @@ export type {
   TableRecord,
   UpdateAttributes,
 } from "./database.ts";
+export { Factory, trait } from "./factory.ts";
+export type { FactoryAttribute, FactoryBuild, FactoryDefinition, FactoryTrait } from "./factory.ts";
 export type {
   JsonSerializable,
   JsonValue,
@@ -32,7 +34,9 @@ export type {
   HasManyDefinition,
   Model,
   ModelAttributes,
+  ModelCreateInput,
   ModelDefinition,
+  ModelFor,
   ModelInstance,
   ModelRegistry,
   ModelTables,
@@ -43,7 +47,7 @@ export type {
   Schema,
 } from "./model.ts";
 export { createServer, Server } from "./server.ts";
-export type { ServerOptions } from "./server.ts";
+export type { FactoryRegistry, ServerOptions } from "./server.ts";
 export { serialize, Serializer } from "./serializer.ts";
 export type {
   IncludeOption,
