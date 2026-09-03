@@ -174,9 +174,9 @@ createServer({
 ```
 
 Enable request diagnostics with `logging: true`. Handled requests are shown in
-collapsed console groups with their status, matched route, duration, request,
-and response. Passthrough, unhandled, and errored requests are identified
-separately:
+collapsed console groups with their status, matched route, duration, parsed
+request body, raw request, and response. Passthrough, unhandled, and errored
+requests are identified separately:
 
 ```ts
 const server = createServer({

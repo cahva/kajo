@@ -39,7 +39,8 @@ and this project adheres to
   time `urlPrefix` support, strict unhandled-request diagnostics, and explicit
   method-aware `passthrough()` rules.
 - Typed request diagnostics for handled, passthrough, unhandled, and errored
-  requests, with an optional collapsed browser-console view.
+  requests, with parsed request bodies in an optional collapsed browser-console
+  view.
 
 ### Fixed
 

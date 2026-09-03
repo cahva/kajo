@@ -11,6 +11,8 @@ export interface HandledRequestLog extends RequestLogBase {
   readonly type: "handled";
   /** Time spent resolving the route and applying its configured delay. */
   readonly durationMs: number;
+  /** The raw request body. */
+  readonly requestBody: string;
   /** The response returned by Kajo. */
   readonly response: Response;
   /** The route pattern that handled the request. */
@@ -31,6 +33,8 @@ export interface ErroredRequestLog extends RequestLogBase {
   readonly type: "error";
   readonly durationMs: number;
   readonly error: unknown;
+  /** The raw request body. */
+  readonly requestBody: string;
   /** The route pattern whose handler failed. */
   readonly route: string;
 }
@@ -66,6 +70,7 @@ export function logRequestToConsole(entry: RequestLog): void {
       entry.error,
       entry.request,
     );
+    console.log("Request body", formatBody(entry.requestBody));
     return;
   }
 
@@ -73,8 +78,21 @@ export function logRequestToConsole(entry: RequestLog): void {
     `[Kajo] ${entry.response.status} ${entry.method} ${entry.url} → ${entry.route} (${formatDuration(entry.durationMs)})`,
   );
   console.log("Response", entry.response);
+  console.log("Request body", formatBody(entry.requestBody));
   console.log("Request", entry.request);
   console.groupEnd();
+}
+
+function formatBody(body: string): unknown {
+  if (!body) {
+    return "(empty)";
+  }
+
+  try {
+    return JSON.parse(body);
+  } catch {
+    return body;
+  }
 }
 
 function formatDuration(durationMs: number): string {

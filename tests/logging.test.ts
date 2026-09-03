@@ -18,6 +18,7 @@ describe("request logging", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       method: "GET",
+      requestBody: "",
       response,
       route: "/api/tasks/:id",
       type: "handled",
@@ -28,7 +29,7 @@ describe("request logging", () => {
 
   test("can toggle console logging after creating the server", async () => {
     const group = vi.spyOn(console, "groupCollapsed").mockImplementation(() => undefined);
-    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     vi.spyOn(console, "groupEnd").mockImplementation(() => undefined);
     const server = createServer({
       intercept: false,
@@ -48,6 +49,30 @@ describe("request logging", () => {
         /^\[Kajo\] 200 GET https:\/\/example\.test\/tasks → \/tasks \(\d+\.\dms\)$/,
       ),
     );
+    expect(log).toHaveBeenCalledWith("Request body", "(empty)");
+  });
+
+  test("shows parsed JSON request bodies in console diagnostics", async () => {
+    vi.spyOn(console, "groupCollapsed").mockImplementation(() => undefined);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "groupEnd").mockImplementation(() => undefined);
+    const server = createServer({
+      intercept: false,
+      logging: true,
+      routes() {
+        this.patch("/tasks/:id", {});
+      },
+    });
+
+    await server.handle(
+      new Request("https://example.test/tasks/1", {
+        body: JSON.stringify({ status: "done" }),
+        headers: { "content-type": "application/json" },
+        method: "PATCH",
+      }),
+    );
+
+    expect(log).toHaveBeenCalledWith("Request body", { status: "done" });
   });
 
   test("reports route handler errors before rethrowing them", async () => {
@@ -70,6 +95,7 @@ describe("request logging", () => {
     expect(entries[0]).toMatchObject({
       error: failure,
       method: "POST",
+      requestBody: "",
       route: "/tasks",
       type: "error",
     });
