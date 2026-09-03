@@ -1,14 +1,13 @@
 /// <reference types="vite/client" />
 
 import {
+  association,
   belongsTo,
   createServer,
   Factory,
   hasMany,
   model,
-  type ModelFor,
   Serializer,
-  type Server,
   trait,
 } from "../../../src/index.ts";
 
@@ -32,15 +31,10 @@ const models = {
   }),
 };
 
-type TaskBoardServer = Server<{}, typeof models>;
-type TaskModel = ModelFor<typeof models, "task">;
-
 export const server = createServer({
   factories: {
-    task: Factory.extend<Task, TaskModel, TaskBoardServer>({
-      afterCreate(task, server) {
-        task.assignee ??= server.schema.users.first();
-      },
+    task: Factory.extend<Task>({
+      assignee: association(),
       status: "backlog",
       title(sequence) {
         return ["Design empty states", "Model task relationships", "Wire up request interception"][
@@ -72,11 +66,11 @@ export const server = createServer({
   },
 
   seeds(server) {
-    const [, linus, margaret] = server.createList("user", 3);
+    const [ada, linus] = server.createList("user", 2);
 
     server.create("task");
     server.create("task", "started", { assignee: linus });
-    server.create("task", "completed", { assignee: margaret });
+    server.create("task", "completed", { assignee: ada });
   },
 
   routes() {

@@ -37,6 +37,7 @@ import {
   hasMany,
   HttpError,
   model,
+  association,
   Serializer,
   trait,
 } from "@cahva/kajo";
@@ -229,6 +230,20 @@ createServer({
     server.create("user", "admin", { name: "Ada" });
   },
 });
+```
+
+Use `association()` on a belongs-to relationship to create its related model.
+Trait names are forwarded to the associated factory, while an explicit
+relationship passed to `server.create()` takes precedence:
+
+```ts
+const postFactory = Factory.extend<{ title: string }>({
+  author: association("admin"),
+  title: "A typed factory graph",
+});
+
+const post = server.create("post");
+const postByAda = server.create("post", { author: ada });
 ```
 
 ## Principles

@@ -17,8 +17,9 @@ export type {
   TableRecord,
   UpdateAttributes,
 } from "./database.ts";
-export { Factory, trait } from "./factory.ts";
+export { association, Factory, trait } from "./factory.ts";
 export type {
+  FactoryAssociation,
   FactoryAfterCreate,
   FactoryAttribute,
   FactoryBuild,

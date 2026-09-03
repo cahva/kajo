@@ -3,6 +3,7 @@ import type { Model, ModelRegistry, RelationshipRegistry } from "./model.ts";
 import type { Server } from "./server.ts";
 
 const TRAIT = Symbol("kajo.factory-trait");
+const ASSOCIATION = Symbol("kajo.factory-association");
 
 export type FactoryModel<Attributes extends object> = Model<
   Attributes,
@@ -43,6 +44,11 @@ export interface FactoryTrait<
   Context = FactoryServer,
 > {
   readonly [TRAIT]: FactoryDefinition<Attributes, Created, Context>;
+}
+
+export interface FactoryAssociation {
+  readonly [ASSOCIATION]: true;
+  readonly traits: readonly string[];
 }
 
 export interface FactoryBuild<
@@ -135,6 +141,22 @@ export function trait<
   definition: FactoryDefinition<Attributes, Created, Context>,
 ): FactoryTrait<Attributes, Created, Context> {
   return { [TRAIT]: definition };
+}
+
+/**
+ * Create the model targeted by the belongs-to relationship at this factory
+ * attribute. Any names are applied as traits on the associated factory.
+ */
+export function association(...traits: readonly string[]): FactoryAssociation {
+  return {
+    [ASSOCIATION]: true,
+    traits,
+  };
+}
+
+/** @internal */
+export function isFactoryAssociation(value: unknown): value is FactoryAssociation {
+  return typeof value === "object" && value !== null && ASSOCIATION in value;
 }
 
 function isFactoryTrait(value: unknown): value is FactoryTrait {

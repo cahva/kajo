@@ -32,6 +32,8 @@ and this project adheres to
 - Typed factories with sequences, dependent attributes, traits, overrides, and
   list creation.
 - Base and trait-specific factory `afterCreate` hooks.
+- Declarative belongs-to factory associations with associated traits, override
+  precedence, and cycle diagnostics.
 - `resource()` route helper with action filters and custom paths.
 - Structured JSON responses for expected `HttpError` failures, including
   shorthand `400` and `404` responses.

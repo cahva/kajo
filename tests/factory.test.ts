@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, expectTypeOf, test } from "vite-plus/test";
 import {
+  association,
   belongsTo,
   createServer,
   Factory,
@@ -166,5 +167,104 @@ describe("factories", () => {
 
     expect(post.author?.name).toBe("User 0");
     expect(post.author?.posts.models[0]?.id).toBe(post.id);
+  });
+
+  test("creates belongs-to relationships with factory associations", () => {
+    const models = {
+      post: model<{ title: string }>().extend({
+        author: belongsTo("user"),
+      }),
+      user: model<User>().extend({
+        posts: hasMany("post"),
+      }),
+    };
+    const server = createServer({
+      factories: {
+        post: Factory.extend<{ title: string }>({
+          author: association("admin"),
+          title: "Factory associations",
+        }),
+        user: userFactory,
+      },
+      intercept: false,
+      models,
+    });
+
+    const post = server.create("post");
+
+    expect(post.author?.role).toBe("admin");
+    expect(post.author?.posts.models.map(({ id }) => id)).toEqual([post.id]);
+    expect(hooks).toEqual(["base:1", "admin:1"]);
+  });
+
+  test("prefers relationship overrides to factory associations", () => {
+    const models = {
+      post: model<{ title: string }>().extend({
+        author: belongsTo("user"),
+      }),
+      user: model<User>(),
+    };
+    const server = createServer({
+      factories: {
+        post: Factory.extend<{ title: string }>({
+          author: association(),
+          title: "Overridden associations",
+        }),
+        user: userFactory,
+      },
+      intercept: false,
+      models,
+    });
+    const author = server.create("user", { name: "Ada" });
+
+    const post = server.create("post", { author });
+
+    expect(post.author?.id).toBe(author.id);
+    expect(server.schema.users.all().length).toBe(1);
+  });
+
+  test("reports invalid and cyclic factory associations", () => {
+    const models = {
+      post: model<{ title: string }>().extend({
+        author: belongsTo("user"),
+      }),
+      user: model<User>().extend({
+        post: belongsTo("post"),
+      }),
+    };
+
+    expect(() =>
+      createServer({
+        factories: {
+          post: Factory.extend<{ title: string }>({
+            missing: association(),
+            title: "Invalid",
+          }),
+        },
+        intercept: false,
+        models,
+      }).create("post"),
+    ).toThrow('Factory association "post.missing" does not match a model relationship.');
+
+    const cyclic = createServer({
+      factories: {
+        post: Factory.extend<{ title: string }>({
+          author: association(),
+          title: "Cycle",
+        }),
+        user: Factory.extend<User>({
+          name: "Ada",
+          post: association(),
+          role: "admin",
+          slug: "ada",
+        }),
+      },
+      intercept: false,
+      models,
+    });
+
+    expect(() => cyclic.create("post")).toThrow(
+      "Factory association cycle detected: post -> user -> post.",
+    );
   });
 });

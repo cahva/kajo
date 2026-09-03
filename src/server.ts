@@ -1,6 +1,12 @@
 import { RequestBoundary } from "./boundary.ts";
 import { createDatabase, type Database, type DatabaseData } from "./database.ts";
-import type { Factory, FactoryAfterCreate, FactoryModel, FactoryServer } from "./factory.ts";
+import {
+  type Factory,
+  type FactoryAfterCreate,
+  isFactoryAssociation,
+  type FactoryModel,
+  type FactoryServer,
+} from "./factory.ts";
 import {
   HttpError,
   type JsonSerializable,
@@ -97,7 +103,9 @@ export class Server<
   readonly #boundary = new RequestBoundary();
   readonly #serializers: SerializerRegistry;
   readonly #factories: FactoryRegistry<Models>;
+  readonly #models: Models;
   readonly #factorySequences = new Map<string, number>();
+  readonly #factoryStack: string[] = [];
   readonly #unhandledRequest: UnhandledRequestPolicy;
   #interceptor: NetworkInterceptor | undefined;
   #isRunning = true;
@@ -127,6 +135,7 @@ export class Server<
     this.#unhandledRequest = options.unhandledRequest ?? "error";
     this.#serializers = options.serializers ?? {};
     this.#factories = options.factories ?? {};
+    this.#models = (options.models ?? {}) as Models;
     this.db = createDatabase(options.fixtures) as Database<ServerTables<Fixtures, Models>>;
 
     for (const modelName of Object.keys(options.models ?? {})) {
@@ -149,6 +158,25 @@ export class Server<
     modelName: Name,
     ...traitsAndOverrides: readonly (string | Partial<ModelCreateInput<Models, Name>>)[]
   ): ModelFor<Models, Name> {
+    if (this.#factoryStack.includes(modelName)) {
+      throw new Error(
+        `Factory association cycle detected: ${[...this.#factoryStack, modelName].join(" -> ")}.`,
+      );
+    }
+
+    this.#factoryStack.push(modelName);
+
+    try {
+      return this.#createModel(modelName, traitsAndOverrides);
+    } finally {
+      this.#factoryStack.pop();
+    }
+  }
+
+  #createModel<Name extends keyof Models & string>(
+    modelName: Name,
+    traitsAndOverrides: readonly (string | Partial<ModelCreateInput<Models, Name>>)[],
+  ): ModelFor<Models, Name> {
     const { overrides, traits } = factoryArguments(traitsAndOverrides);
     const factory = this.#factories[modelName];
     const sequence = this.#factorySequences.get(modelName) ?? 0;
@@ -158,7 +186,7 @@ export class Server<
     }
 
     const build = factory?.build(sequence, traits, overrides);
-    const attributes = build?.attributes ?? overrides;
+    const attributes = this.#resolveFactoryAssociations(modelName, build?.attributes ?? overrides);
     const collection = Reflect.get(this.schema, pluralize(modelName));
 
     if (
@@ -187,6 +215,41 @@ export class Server<
     }
 
     return created;
+  }
+
+  #resolveFactoryAssociations(
+    modelName: keyof Models & string,
+    attributes: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const resolved = { ...attributes };
+    const definition = this.#models[modelName];
+
+    for (const [relationshipName, value] of Object.entries(resolved)) {
+      if (!isFactoryAssociation(value)) {
+        continue;
+      }
+
+      const relationship = definition?.relationships[relationshipName];
+
+      if (!relationship) {
+        throw new Error(
+          `Factory association "${modelName}.${relationshipName}" does not match a model relationship.`,
+        );
+      }
+
+      if (relationship.kind !== "belongsTo") {
+        throw new Error(
+          `Factory association "${modelName}.${relationshipName}" must target a belongsTo relationship.`,
+        );
+      }
+
+      resolved[relationshipName] = this.create(
+        relationship.modelName as keyof Models & string,
+        ...value.traits,
+      );
+    }
+
+    return resolved;
   }
 
   /**
