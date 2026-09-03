@@ -133,8 +133,8 @@ Runnable examples live in [`examples`](./examples). The vanilla TypeScript task
 board exercises Kajo through real browser requests:
 
 ```bash
-cd examples/task-board
-vp dev
+vp install
+vp run example:task-board
 ```
 
 ## Development

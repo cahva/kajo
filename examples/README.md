@@ -8,7 +8,9 @@ integration tests for complete browser workflows.
 A framework-neutral TypeScript app with users, assigned tasks, CRUD operations,
 relationships, serializers, and a custom summary endpoint.
 
+From the repository root:
+
 ```sh
-cd task-board
-vp dev
+vp install
+vp run example:task-board
 ```

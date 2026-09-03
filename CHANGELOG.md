@@ -30,4 +30,8 @@ and this project adheres to
 - Runnable vanilla TypeScript task-board example covering browser interception,
   relationships, serializers, custom handlers, and CRUD shorthands.
 
+### Fixed
+
+- Added an unambiguous root command for launching the task-board example.
+
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD
