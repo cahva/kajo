@@ -100,5 +100,7 @@ and this project adheres to
   explicit `undefined` relationship placeholders to be assigned before save.
 - Excluded model IDs and conflicting target attribute types from polymorphic
   bulk updates.
+- Added regression coverage ensuring passthrough leaves request metadata and
+  binary request and response bodies unchanged.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD

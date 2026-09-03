@@ -161,6 +161,46 @@ describe("intercepted request boundaries", () => {
     }
   });
 
+  test("preserves passthrough request and binary response data", async () => {
+    const upstream = await startEchoUpstream();
+
+    try {
+      const server = createServer({
+        routes() {
+          this.namespace = "/api";
+          this.get("/mocked", { source: "kajo" });
+          this.passthrough("/upload", { methods: ["POST"] });
+        },
+        urlPrefix: upstream.origin,
+      });
+      kajoServers.push(server);
+      const body = Uint8Array.from([0, 1, 127, 128, 255]);
+
+      const response = await fetch(`${upstream.origin}/api/upload?part=avatar`, {
+        body,
+        headers: {
+          "content-type": "application/octet-stream",
+          "x-kajo-probe": "preserved",
+        },
+        method: "POST",
+      });
+
+      expect(upstream.request()).toEqual({
+        body: [...body],
+        contentType: "application/octet-stream",
+        method: "POST",
+        probe: "preserved",
+        url: "/api/upload?part=avatar",
+      });
+      expect(response.status).toBe(201);
+      expect(response.headers.get("content-type")).toBe("application/octet-stream");
+      expect(response.headers.get("x-kajo-upstream")).toBe("preserved");
+      expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([...body]);
+    } finally {
+      await upstream.close();
+    }
+  });
+
   test("uses a catch-all passthrough only when no registered route matches", async () => {
     const upstream = await startUpstream("upstream");
 
@@ -240,5 +280,67 @@ async function startUpstream(body: string): Promise<{
         });
       }),
     origin: `http://127.0.0.1:${port}`,
+  };
+}
+
+interface EchoRequest {
+  readonly body: number[];
+  readonly contentType: string | undefined;
+  readonly method: string | undefined;
+  readonly probe: string | undefined;
+  readonly url: string | undefined;
+}
+
+async function startEchoUpstream(): Promise<{
+  close(): Promise<void>;
+  origin: string;
+  request(): EchoRequest;
+}> {
+  let received: EchoRequest | undefined;
+  const server = createHttpServer(async (request, response) => {
+    const chunks: Buffer[] = [];
+
+    for await (const chunk of request) {
+      chunks.push(Buffer.from(chunk));
+    }
+
+    const body = Buffer.concat(chunks);
+    received = {
+      body: [...body],
+      contentType: request.headers["content-type"],
+      method: request.method,
+      probe: request.headers["x-kajo-probe"] as string | undefined,
+      url: request.url,
+    };
+    response.writeHead(201, {
+      "content-type": "application/octet-stream",
+      "x-kajo-upstream": "preserved",
+    });
+    response.end(body);
+  });
+  await new Promise<void>((resolve) => {
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const { port } = server.address() as AddressInfo;
+
+  return {
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve();
+          }
+        });
+      }),
+    origin: `http://127.0.0.1:${port}`,
+    request: () => {
+      if (!received) {
+        throw new Error("The upstream server has not received a request.");
+      }
+
+      return received;
+    },
   };
 }

@@ -116,6 +116,7 @@ These are behavioral inputs, not commitments to preserve Mirage internals.
 | Mirage issue                                                                                             | Kajo behavior                                                                                                        |
 | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | [#191: traits, `afterCreate`, and factory associations](https://github.com/miragejs/miragejs/issues/191) | Declarative associations run before creation, and explicit caller relationships take precedence.                     |
+| [#343: passthrough requests are altered](https://github.com/miragejs/miragejs/issues/343)                | Passthrough preserves the URL, headers, body bytes, status, response headers, and binary response body.              |
 | [Discuss #38: dynamic attributes evaluated twice](https://github.com/miragejs/discuss/issues/38)         | Lazy dependency resolution evaluates each factory attribute exactly once.                                            |
 | [#771: missing typed `handledRequests`](https://github.com/miragejs/miragejs/issues/771)                 | Request history is a first-class typed Kajo API.                                                                     |
 | [#1056: observing requests without replacing handlers](https://github.com/miragejs/miragejs/issues/1056) | Typed logger callbacks and tracked request history observe existing routes without changing them.                    |
@@ -123,7 +124,8 @@ These are behavioral inputs, not commitments to preserve Mirage internals.
 
 ## Prioritized compatibility work
 
-1. Add polymorphic `hasMany` if issue research demonstrates a current use case.
-2. Expand the issue-driven regression suite before declaring a stable API.
+1. Expand the issue-driven regression suite before declaring a stable API.
+2. Define the initial OpenAPI integration around Kajo's typed route and schema
+   sources of truth.
 
 OpenAPI integration starts after this compatibility foundation is stable.
