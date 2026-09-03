@@ -127,6 +127,16 @@ createServer({
 - **Well tested.** Public behavior is specified by tests, including
   compatibility and regression coverage.
 
+## Examples
+
+Runnable examples live in [`examples`](./examples). The vanilla TypeScript task
+board exercises Kajo through real browser requests:
+
+```bash
+cd examples/task-board
+vp dev
+```
+
 ## Development
 
 Install dependencies:

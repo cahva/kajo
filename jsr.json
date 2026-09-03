@@ -12,6 +12,7 @@
     ".zed",
     "AGENTS.md",
     "dist",
+    "examples",
     "node_modules",
     "package.json",
     "pnpm-lock.yaml",

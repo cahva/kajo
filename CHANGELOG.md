@@ -27,5 +27,7 @@ and this project adheres to
   transforms, relationship IDs, sideloading, and embedding.
 - Conventional CRUD route shorthands with inferred or explicit schema
   collections and normalized JSON request bodies.
+- Runnable vanilla TypeScript task-board example covering browser interception,
+  relationships, serializers, custom handlers, and CRUD shorthands.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD

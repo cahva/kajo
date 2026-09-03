@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="A task board powered entirely by a Kajo simulated API." />
+    <title>Kajo task board</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Kajo example</p>
+          <h1>Your backend,<br />on the horizon.</h1>
+          <p class="intro">
+            This board talks to <code>/api</code> with real Fetch requests. Kajo intercepts them and
+            serves a typed API in your browser.
+          </p>
+        </div>
+        <aside class="api-status" aria-label="API status">
+          <span class="pulse"></span>
+          Simulated API online
+        </aside>
+      </header>
+
+      <section class="toolbar" aria-label="Create a task">
+        <form id="task-form">
+          <label>
+            <span>New task</span>
+            <input name="title" placeholder="What needs to happen?" autocomplete="off" required />
+          </label>
+          <label>
+            <span>Assignee</span>
+            <select id="assignee" name="assigneeId" required></select>
+          </label>
+          <button type="submit">Add task</button>
+        </form>
+      </section>
+
+      <section id="summary" class="summary" aria-label="Task summary"></section>
+      <section id="board" class="board" aria-live="polite"></section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

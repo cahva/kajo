@@ -1,0 +1,18 @@
+{
+  "name": "@cahva/kajo-example-task-board",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vp build",
+    "check": "vp check",
+    "dev": "vp dev"
+  },
+  "dependencies": {
+    "@cahva/kajo": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
