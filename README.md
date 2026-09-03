@@ -317,12 +317,14 @@ vp test
 Run the real-browser interception suite:
 
 ```bash
+vp install
 vp exec playwright install chromium
 vp run test:browser
 ```
 
 Set `KAJO_CHROMIUM_PATH` to use an existing Chromium executable instead of a
-Playwright-managed browser.
+Playwright-managed browser. After dependencies and a browser are installed,
+subsequent runs only need `vp run test:browser`.
 
 Build the library:
 
