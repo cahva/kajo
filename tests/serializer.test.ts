@@ -1,5 +1,13 @@
 import { describe, expect, test } from "vite-plus/test";
-import { belongsTo, createServer, model, Serializer } from "../src/index.ts";
+import {
+  belongsTo,
+  createServer,
+  model,
+  RestSerializer,
+  type SerializableModel,
+  Serializer,
+  type RelationshipRegistry,
+} from "../src/index.ts";
 
 function createPostServer(serializer: Serializer) {
   return createServer({
@@ -149,6 +157,51 @@ describe("serializers", () => {
       post: {
         authorId: "1",
         id: "1",
+        title: "Typed APIs",
+      },
+    });
+  });
+
+  test("RestSerializer includes relationship ids without sideloading", async () => {
+    const serializer = RestSerializer.extend();
+    const server = createPostServer(serializer);
+    const response = await server.handle(new Request("https://example.test/posts/1"));
+
+    expect(serializer).toBeInstanceOf(RestSerializer);
+    await expect(response?.json()).resolves.toEqual({
+      post: {
+        authorId: "1",
+        id: "1",
+        title: "Typed APIs",
+      },
+    });
+  });
+
+  test("supports class-based attribute and root extensions", async () => {
+    class ApiSerializer extends RestSerializer {
+      override rootKey(modelName: string, isCollection: boolean): string {
+        return `${super.rootKey(modelName, isCollection)}Payload`;
+      }
+
+      override serializeAttributes(
+        resource: SerializableModel,
+        relationships: RelationshipRegistry,
+      ): Record<string, unknown> {
+        return {
+          ...super.serializeAttributes(resource, relationships),
+          resourceType: resource.modelName,
+        };
+      }
+    }
+
+    const server = createPostServer(ApiSerializer.extend());
+    const response = await server.handle(new Request("https://example.test/posts/1"));
+
+    await expect(response?.json()).resolves.toEqual({
+      postPayload: {
+        authorId: "1",
+        id: "1",
+        resourceType: "post",
         title: "Typed APIs",
       },
     });

@@ -38,6 +38,7 @@ import {
   HttpError,
   model,
   association,
+  RestSerializer,
   Serializer,
   trait,
 } from "@cahva/kajo";
@@ -179,10 +180,19 @@ const PostSerializer = Serializer.extend({
 createServer({
   models,
   serializers: {
+    application: RestSerializer.extend({
+      keyForAttribute: (attribute) => attribute,
+    }),
     post: PostSerializer,
   },
 });
 ```
+
+`RestSerializer` uses rooted payloads and includes relationship IDs by default.
+For formats that need more than option callbacks, subclass `Serializer` or
+`RestSerializer` and override `rootKey`, `serializeAttributes`,
+`shouldSerializeRelationshipIds`, or `serializeRelationshipIds`. Calling
+`extend()` on a subclass preserves its class and inherited behavior.
 
 Routes can be defined at three levels. Use a custom handler when an endpoint
 has application-specific behavior:

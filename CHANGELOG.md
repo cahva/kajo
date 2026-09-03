@@ -32,6 +32,8 @@ and this project adheres to
 - Automatic relationship cleanup when a model is destroyed.
 - Application and per-model serializers with roots, attribute filtering, key
   transforms, relationship IDs, sideloading, and embedding.
+- A `RestSerializer` preset and class-based extension hooks for root,
+  attribute, and relationship ID serialization.
 - Conventional CRUD route shorthands with inferred or explicit schema
   collections and normalized JSON request bodies.
 - Runnable vanilla TypeScript task-board example covering browser interception,

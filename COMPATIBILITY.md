@@ -12,6 +12,7 @@ differences visible.
 | **Supported**   | The common Mirage behavior has a tested Kajo equivalent.                |
 | **Partial**     | The main use case works, but documented Mirage behavior remains.        |
 | **Planned**     | The capability belongs in Kajo but has not been implemented yet.        |
+| **Deferred**    | Useful for some projects, but outside the initial stable core.          |
 | **Different**   | Kajo deliberately uses a modern platform or TypeScript API instead.     |
 | **Not planned** | The API exposes a Mirage implementation detail Kajo will not reproduce. |
 
@@ -82,17 +83,17 @@ change before the first stable version.
 
 ## Serializers
 
-| Mirage capability                         | Kajo status   | Notes                                                              |
-| ----------------------------------------- | ------------- | ------------------------------------------------------------------ |
-| Application and per-model serializers     | **Supported** | Per-model configuration takes precedence.                          |
-| Root keys and attribute filtering         | **Supported** | Includes model and collection root transforms.                     |
-| Attribute and relationship key transforms | **Supported** | Typed option hooks cover common REST naming conventions.           |
-| Embedded and sideloaded relationships     | **Supported** | Includes cycle protection and configurable relationship IDs.       |
-| Dynamic `include`                         | **Supported** | Receives the request and primary resource.                         |
-| Generic `Serializer` extension            | **Partial**   | Common options are covered; Mirage's complete hook surface is not. |
-| `RestSerializer`                          | **Planned**   | The base serializer already covers much of this format.            |
-| `ActiveModelSerializer`                   | **Planned**   | Requires underscore key conventions and AMS relationship behavior. |
-| `JSONAPISerializer`                       | **Planned**   | A dedicated spec-compliant serializer is required.                 |
+| Mirage capability                         | Kajo status   | Notes                                                        |
+| ----------------------------------------- | ------------- | ------------------------------------------------------------ |
+| Application and per-model serializers     | **Supported** | Per-model configuration takes precedence.                    |
+| Root keys and attribute filtering         | **Supported** | Includes model and collection root transforms.               |
+| Attribute and relationship key transforms | **Supported** | Typed option hooks cover common REST naming conventions.     |
+| Embedded and sideloaded relationships     | **Supported** | Includes cycle protection and configurable relationship IDs. |
+| Dynamic `include`                         | **Supported** | Receives the request and primary resource.                   |
+| Generic `Serializer` extension            | **Supported** | Options and overridable methods cover common REST formats.   |
+| `RestSerializer`                          | **Supported** | Rooted REST payloads with relationship IDs by default.       |
+| `ActiveModelSerializer`                   | **Deferred**  | Rails-specific adapter deferred until demand.                |
+| `JSONAPISerializer`                       | **Deferred**  | Spec-specific adapter deferred until demand.                 |
 
 ## Route shorthands
 
@@ -119,11 +120,9 @@ These are behavioral inputs, not commitments to preserve Mirage internals.
 
 ## Prioritized compatibility work
 
-1. Fill schema and model lifecycle gaps, especially unsaved models and
-   relationship ID APIs.
-2. Add dedicated REST, ActiveModel, and JSON:API serializers.
-3. Add polymorphic relationships and their serializer behavior.
-4. Add configurable identity managers and selective fixture loading.
-5. Expand the issue-driven regression suite before declaring a stable API.
+1. Add polymorphic relationships and their serializer behavior.
+2. Add selective fixture loading and finish factory dependency ordering.
+3. Add request normalization helpers and decide coalesced request behavior.
+4. Expand the issue-driven regression suite before declaring a stable API.
 
 OpenAPI integration starts after this compatibility foundation is stable.

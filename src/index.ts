@@ -84,10 +84,11 @@ export type {
   ServerOptions,
   UnhandledRequestPolicy,
 } from "./server.ts";
-export { serialize, Serializer } from "./serializer.ts";
+export { RestSerializer, serialize, Serializer } from "./serializer.ts";
 export type {
   IncludeOption,
   SerializableModel,
+  SerializationContext,
   SerializeIdsOption,
   SerializerOptions,
   SerializerRegistry,

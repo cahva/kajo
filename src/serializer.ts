@@ -38,12 +38,20 @@ export interface SerializableModel {
   };
 }
 
+export interface SerializationContext {
+  readonly includedRelationships: ReadonlySet<string>;
+  readonly request: KajoRequest;
+}
+
 /**
  * Controls how models and collections become JSON response payloads.
  */
 export class Serializer {
-  static extend(options: SerializerOptions = {}): Serializer {
-    return new Serializer(options);
+  static extend<Instance extends Serializer>(
+    this: new (options?: SerializerOptions) => Instance,
+    options: SerializerOptions = {},
+  ): Instance {
+    return new this(options);
   }
 
   readonly attrs: readonly string[] | undefined;
@@ -63,8 +71,9 @@ export class Serializer {
     this.serializeIds = options.serializeIds ?? "included";
   }
 
-  extend(options: SerializerOptions = {}): Serializer {
-    return new Serializer({ ...this.#options, ...options });
+  extend(options: SerializerOptions = {}): this {
+    const Constructor = this.constructor as new (options?: SerializerOptions) => this;
+    return new Constructor({ ...this.#options, ...options });
   }
 
   keyForAttribute(attribute: string): string {
@@ -100,6 +109,64 @@ export class Serializer {
 
   relationshipsToInclude(request: KajoRequest, resource: SerializableModel): readonly string[] {
     return typeof this.include === "function" ? this.include(request, resource) : this.include;
+  }
+
+  /** Return the top-level payload key for a model or collection. */
+  rootKey(modelName: string, isCollection: boolean): string {
+    return isCollection ? this.keyForCollection(modelName) : this.keyForModel(modelName);
+  }
+
+  /** Transform a model's persisted attributes into response fields. */
+  serializeAttributes(
+    resource: SerializableModel,
+    relationships: RelationshipRegistry,
+  ): Record<string, unknown> {
+    const relationshipKeys = new Set(
+      Object.entries(relationships).map(([name, relationship]) =>
+        relationship.kind === "belongsTo" ? `${name}Id` : `${singularize(name)}Ids`,
+      ),
+    );
+    const selectedAttributes = this.attrs ? new Set(this.attrs) : undefined;
+
+    return Object.fromEntries(
+      Object.entries(resource.attrs)
+        .filter(
+          ([name]) =>
+            !relationshipKeys.has(name) && (!selectedAttributes || selectedAttributes.has(name)),
+        )
+        .map(([name, value]) => [this.keyForAttribute(name), value]),
+    );
+  }
+
+  /** Decide whether a relationship's foreign key belongs in this resource. */
+  shouldSerializeRelationshipIds(relationshipName: string, context: SerializationContext): boolean {
+    return (
+      !this.embed &&
+      (this.serializeIds === "always" ||
+        (this.serializeIds === "included" && context.includedRelationships.has(relationshipName)))
+    );
+  }
+
+  /** Transform one relationship into foreign-key response fields. */
+  serializeRelationshipIds(
+    relationshipName: string,
+    relationship: RelationshipDefinition,
+    value: unknown,
+  ): Record<string, unknown> {
+    const models = relationshipModels(value);
+
+    return relationship.kind === "belongsTo"
+      ? { [this.keyForForeignKey(relationshipName)]: models[0]?.id ?? null }
+      : { [this.keyForRelationshipIds(relationshipName)]: models.map(({ id }) => id) };
+  }
+}
+
+/**
+ * Generic REST payloads with roots and relationship IDs serialized by default.
+ */
+export class RestSerializer extends Serializer {
+  constructor(options: SerializerOptions = {}) {
+    super({ serializeIds: "always", ...options });
   }
 }
 
@@ -139,9 +206,7 @@ export function serialize(
   }
 
   const payload: Record<string, unknown> = {
-    [primary.isCollection
-      ? primarySerializer.keyForCollection(primary.modelName)
-      : primarySerializer.keyForModel(primary.modelName)]: primaryData,
+    [primarySerializer.rootKey(primary.modelName, primary.isCollection)]: primaryData,
   };
 
   for (const sideload of sideloads.values()) {
@@ -163,7 +228,11 @@ function serializeModel(
   const serializer = serializerFor(resource.modelName, serializers);
   const relationships = resource[MODEL_METADATA].relationships;
   const included = new Set(serializer.relationshipsToInclude(request, resource));
-  const json = serializeAttributes(resource, serializer, relationships);
+  const context: SerializationContext = {
+    includedRelationships: included,
+    request,
+  };
+  const json = serializer.serializeAttributes(resource, relationships);
   const identity = `${resource.modelName}:${resource.id}`;
 
   if (visited.has(identity)) {
@@ -176,12 +245,11 @@ function serializeModel(
     const relationshipValue = Reflect.get(resource, name);
     const shouldInclude = included.has(name);
 
-    if (
-      !serializer.embed &&
-      (serializer.serializeIds === "always" ||
-        (serializer.serializeIds === "included" && shouldInclude))
-    ) {
-      addRelationshipIds(json, serializer, name, relationship, relationshipValue);
+    if (serializer.shouldSerializeRelationshipIds(name, context)) {
+      Object.assign(
+        json,
+        serializer.serializeRelationshipIds(name, relationship, relationshipValue),
+      );
     }
 
     if (!shouldInclude) {
@@ -214,44 +282,6 @@ function serializeModel(
 
   visited.delete(identity);
   return json;
-}
-
-function serializeAttributes(
-  resource: SerializableModel,
-  serializer: Serializer,
-  relationships: RelationshipRegistry,
-): Record<string, unknown> {
-  const relationshipKeys = new Set(
-    Object.entries(relationships).map(([name, relationship]) =>
-      relationship.kind === "belongsTo" ? `${name}Id` : `${singularize(name)}Ids`,
-    ),
-  );
-  const selectedAttributes = serializer.attrs ? new Set(serializer.attrs) : undefined;
-
-  return Object.fromEntries(
-    Object.entries(resource.attrs)
-      .filter(
-        ([name]) =>
-          !relationshipKeys.has(name) && (!selectedAttributes || selectedAttributes.has(name)),
-      )
-      .map(([name, value]) => [serializer.keyForAttribute(name), value]),
-  );
-}
-
-function addRelationshipIds(
-  json: Record<string, unknown>,
-  serializer: Serializer,
-  name: string,
-  relationship: RelationshipDefinition,
-  value: unknown,
-): void {
-  const models = relationshipModels(value);
-
-  if (relationship.kind === "belongsTo") {
-    json[serializer.keyForForeignKey(name)] = models[0]?.id ?? null;
-  } else {
-    json[serializer.keyForRelationshipIds(name)] = models.map(({ id }) => id);
-  }
 }
 
 function relationshipModels(value: unknown): SerializableModel[] {
