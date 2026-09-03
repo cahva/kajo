@@ -11,6 +11,7 @@ import type {
 
 declare const modelAttributes: unique symbol;
 declare const modelRelationships: unique symbol;
+export const MODEL_METADATA: unique symbol = Symbol("kajo.model");
 
 export interface RelationshipOptions {
   /**
@@ -165,6 +166,9 @@ export interface ModelInstance<
   readonly attrs: StoredRecord<Attributes>;
   readonly isDestroyed: boolean;
   readonly modelName: string;
+  readonly [MODEL_METADATA]: {
+    readonly relationships: Relationships;
+  };
 
   destroy(): void;
   reload(): Model<Attributes, Models, Relationships>;
@@ -416,6 +420,7 @@ function createModel<
   let isDestroyed = false;
 
   const instance: ModelInstance<Attributes, Models, Relationships> = {
+    [MODEL_METADATA]: { relationships },
     get attrs() {
       return record;
     },

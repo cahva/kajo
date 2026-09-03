@@ -44,3 +44,11 @@ export type {
 } from "./model.ts";
 export { createServer, Server } from "./server.ts";
 export type { ServerOptions } from "./server.ts";
+export { serialize, Serializer } from "./serializer.ts";
+export type {
+  IncludeOption,
+  SerializableModel,
+  SerializeIdsOption,
+  SerializerOptions,
+  SerializerRegistry,
+} from "./serializer.ts";

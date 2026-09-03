@@ -23,5 +23,7 @@ and this project adheres to
   automatic model response serialization.
 - Typed `belongsTo` and `hasMany` relationships with inverse discovery,
   explicit inverses, and foreign-key synchronization.
+- Application and per-model serializers with roots, attribute filtering, key
+  transforms, relationship IDs, sideloading, and embedding.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD

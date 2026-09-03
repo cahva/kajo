@@ -99,12 +99,14 @@ test("serializes model collections returned from route handlers", async () => {
   const collectionResponse = await server.handle(new Request("https://example.test/movies"));
   const modelResponse = await server.handle(new Request("https://example.test/movies/1"));
 
-  await expect(collectionResponse?.json()).resolves.toEqual([
-    { id: "1", title: "Arrival", year: 2016 },
-  ]);
+  await expect(collectionResponse?.json()).resolves.toEqual({
+    movies: [{ id: "1", title: "Arrival", year: 2016 }],
+  });
   await expect(modelResponse?.json()).resolves.toEqual({
-    id: "1",
-    title: "Arrival",
-    year: 2016,
+    movie: {
+      id: "1",
+      title: "Arrival",
+      year: 2016,
+    },
   });
 });

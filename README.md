@@ -30,7 +30,7 @@ Kajo can register typed route handlers and intercept requests made with Fetch
 or XMLHttpRequest:
 
 ```ts
-import { belongsTo, createServer, hasMany, model } from "@cahva/kajo";
+import { belongsTo, createServer, hasMany, model, Serializer } from "@cahva/kajo";
 
 interface Movie {
   title: string;
@@ -53,7 +53,7 @@ const server = createServer({
 });
 
 const response = await fetch("/api/movies/1");
-await response.json(); // { id: "1", title: "Arrival" }
+await response.json(); // { movie: { id: "1", title: "Arrival" } }
 
 server.shutdown();
 ```
@@ -80,6 +80,25 @@ const models = {
 Kajo infers the inverse when there is exactly one match. Use
 `{ inverse: "relationshipName" }` to disambiguate, or `{ inverse: null }` for
 an association without an inverse.
+
+Models and collections pass through an application or model-specific
+`Serializer`. Serializers control root keys, selected attributes, key
+transforms, relationship IDs, sideloading, and embedding:
+
+```ts
+const PostSerializer = Serializer.extend({
+  attrs: ["id", "title"],
+  include: ["author"],
+  embed: false,
+});
+
+createServer({
+  models,
+  serializers: {
+    post: PostSerializer,
+  },
+});
+```
 
 ## Principles
 

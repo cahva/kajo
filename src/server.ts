@@ -16,6 +16,7 @@ import {
   type Schema,
 } from "./model.ts";
 import { joinPaths, Router } from "./router.ts";
+import { serialize, type SerializerRegistry } from "./serializer.ts";
 
 const HTTP_METHODS = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"] as const;
 
@@ -43,6 +44,8 @@ export interface ServerOptions<
   readonly models?: Models;
   /** Initialize additional application data. */
   readonly seeds?: (server: Server<Fixtures, Models>) => void;
+  /** Application and per-model response serializers. */
+  readonly serializers?: SerializerRegistry;
 }
 
 /**
@@ -53,6 +56,7 @@ export class Server<
   Models extends ModelRegistry = {},
 > {
   readonly #router = new Router<ServerTables<Fixtures, Models>, Models>();
+  readonly #serializers: SerializerRegistry;
   #interceptor: NetworkInterceptor | undefined;
   #isRunning = true;
 
@@ -70,6 +74,7 @@ export class Server<
 
   constructor(options: Omit<ServerOptions<Fixtures, Models>, "routes" | "seeds"> = {}) {
     this.timing = options.timing ?? 0;
+    this.#serializers = options.serializers ?? {};
     this.db = createDatabase(options.fixtures) as Database<ServerTables<Fixtures, Models>>;
 
     for (const modelName of Object.keys(options.models ?? {})) {
@@ -110,7 +115,7 @@ export class Server<
       await delay(timing);
     }
 
-    return toResponse(result);
+    return toResponse(result, routeRequest, this.#serializers);
   }
 
   /** Stop this server from handling requests. */
@@ -204,6 +209,7 @@ export function createServer<Fixtures extends DatabaseData = {}, Models extends 
     fixtures: options.fixtures,
     intercept: options.intercept,
     models: options.models,
+    serializers: options.serializers,
     timing: options.timing,
   });
   options.routes?.call(server);
@@ -238,7 +244,11 @@ async function resolveResponder<Tables extends DatabaseData, Models extends Mode
   return responder instanceof Response ? responder.clone() : responder;
 }
 
-function toResponse(result: JsonSerializable | JsonValue | Response | undefined): Response {
+function toResponse(
+  result: JsonSerializable | JsonValue | Response | undefined,
+  request: KajoRequest,
+  serializers: SerializerRegistry,
+): Response {
   if (result instanceof Response) {
     return result;
   }
@@ -247,7 +257,9 @@ function toResponse(result: JsonSerializable | JsonValue | Response | undefined)
     return new Response(null, { status: 204 });
   }
 
-  return Response.json(isJsonSerializable(result) ? result.toJSON() : result);
+  const serialized = serialize(result, request, serializers);
+
+  return Response.json(isJsonSerializable(serialized) ? serialized.toJSON() : serialized);
 }
 
 function isJsonSerializable(value: unknown): value is JsonSerializable {
