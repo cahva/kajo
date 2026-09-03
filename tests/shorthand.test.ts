@@ -99,3 +99,102 @@ describe("route shorthands", () => {
     expect(server.schema.movies.find("1")).toBeNull();
   });
 });
+
+describe("resource routes", () => {
+  test("registers a complete CRUD resource", async () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        movie: model<{ title: string }>(),
+      },
+      routes() {
+        this.resource("movies");
+      },
+      seeds(server) {
+        server.schema.movies.create({ title: "Arrival" });
+      },
+    });
+
+    const index = await server.handle(new Request("https://example.test/movies"));
+    const created = await server.handle(
+      new Request("https://example.test/movies", {
+        body: JSON.stringify({ movie: { title: "Contact" } }),
+        method: "POST",
+      }),
+    );
+    const updated = await server.handle(
+      new Request("https://example.test/movies/1", {
+        body: JSON.stringify({ movie: { title: "Interstellar" } }),
+        method: "PUT",
+      }),
+    );
+    const deleted = await server.handle(
+      new Request("https://example.test/movies/1", {
+        method: "DELETE",
+      }),
+    );
+
+    expect(index?.status).toBe(200);
+    expect(created?.status).toBe(201);
+    await expect(updated?.json()).resolves.toEqual({
+      movie: { id: "1", title: "Interstellar" },
+    });
+    expect(deleted?.status).toBe(200);
+  });
+
+  test("supports action filters and custom paths", async () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        movie: model<{ title: string }>(),
+      },
+      routes() {
+        this.resource("movies", {
+          only: ["index", "show"],
+          path: "/films",
+        });
+      },
+    });
+
+    await expect(server.handle(new Request("https://example.test/films"))).resolves.toBeInstanceOf(
+      Response,
+    );
+    await expect(
+      server.handle(new Request("https://example.test/films/1")),
+    ).resolves.toBeInstanceOf(Response);
+    await expect(
+      server.handle(
+        new Request("https://example.test/films", {
+          method: "POST",
+        }),
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  test("supports except filters and rejects conflicting filters", async () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        movie: model<{ title: string }>(),
+      },
+      routes() {
+        this.resource("movie", { except: ["delete"] });
+      },
+    });
+
+    await expect(
+      server.handle(
+        new Request("https://example.test/movies/1", {
+          method: "DELETE",
+        }),
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(() =>
+      server.resource("movies", {
+        except: ["delete"],
+        only: ["index"],
+      }),
+    ).toThrow('Resource options cannot combine "only" and "except".');
+  });
+});

@@ -32,6 +32,7 @@ and this project adheres to
 - Typed factories with sequences, dependent attributes, traits, overrides, and
   list creation.
 - Base and trait-specific factory `afterCreate` hooks.
+- `resource()` route helper with action filters and custom paths.
 
 ### Fixed
 

@@ -116,6 +116,18 @@ createServer({
 });
 ```
 
+Register the same CRUD routes together with `resource()`:
+
+```ts
+createServer({
+  models,
+  routes() {
+    this.resource("posts");
+    this.resource("users", { only: ["index", "show"] });
+  },
+});
+```
+
 Factories generate realistic model data with sequences, dependent attributes,
 traits, and final overrides:
 

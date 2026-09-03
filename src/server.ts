@@ -27,6 +27,17 @@ const HTTP_METHODS = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"
 
 type HttpMethod = (typeof HTTP_METHODS)[number];
 
+export type ResourceAction = "create" | "delete" | "index" | "show" | "update";
+
+export interface ResourceOptions {
+  /** Register only these actions. */
+  readonly only?: readonly ResourceAction[];
+  /** Register every action except these. */
+  readonly except?: readonly ResourceAction[];
+  /** Override the URL path while retaining the schema collection name. */
+  readonly path?: string;
+}
+
 /**
  * Configuration used to create a Kajo server.
  */
@@ -266,6 +277,43 @@ export class Server<
     this.#register("PUT", path, responder, options);
   }
 
+  /**
+   * Register conventional index, show, create, update, and delete routes for a
+   * schema collection.
+   */
+  resource(name: string, options: ResourceOptions = {}): void {
+    if (options.only && options.except) {
+      throw new TypeError('Resource options cannot combine "only" and "except".');
+    }
+
+    const collectionName = Object.prototype.hasOwnProperty.call(this.db, name)
+      ? name
+      : pluralize(name);
+    const path = normalizeResourcePath(options.path ?? `/${collectionName}`);
+    const actions = selectedResourceActions(options);
+
+    if (actions.has("index")) {
+      this.get(path, collectionName);
+    }
+
+    if (actions.has("show")) {
+      this.get(`${path}/:id`, collectionName);
+    }
+
+    if (actions.has("create")) {
+      this.post(path, collectionName);
+    }
+
+    if (actions.has("update")) {
+      this.put(`${path}/:id`, collectionName);
+      this.patch(`${path}/:id`, collectionName);
+    }
+
+    if (actions.has("delete")) {
+      this.del(`${path}/:id`, collectionName);
+    }
+  }
+
   #register(
     method: HttpMethod,
     path: string,
@@ -293,6 +341,22 @@ export class Server<
 
     this.#router.add(method, joinPaths(this.namespace, path), responder, options);
   }
+}
+
+const RESOURCE_ACTIONS: readonly ResourceAction[] = ["index", "show", "create", "update", "delete"];
+
+function selectedResourceActions(options: ResourceOptions): Set<ResourceAction> {
+  const only = options.only ? new Set(options.only) : undefined;
+  const except = new Set(options.except ?? []);
+
+  return new Set(
+    RESOURCE_ACTIONS.filter((action) => (only ? only.has(action) : !except.has(action))),
+  );
+}
+
+function normalizeResourcePath(path: string): string {
+  const normalized = `/${path}`.replaceAll(/\/+/g, "/");
+  return normalized.length > 1 && normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
 }
 
 function isShorthandMethod(method: HttpMethod): method is ShorthandMethod {
