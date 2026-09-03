@@ -5,8 +5,8 @@ integration tests for complete browser workflows.
 
 ## Task board
 
-A framework-neutral TypeScript app with users, assigned tasks, CRUD operations,
-relationships, serializers, and a custom summary endpoint.
+A framework-neutral TypeScript app with users, assigned tasks, a CRUD
+`resource()`, relationships, serializers, and a custom summary endpoint.
 
 From the repository root:
 

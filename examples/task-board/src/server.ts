@@ -80,10 +80,9 @@ export const server = createServer({
   routes() {
     this.namespace = "/api";
 
-    this.get("/tasks");
-    this.post("/tasks");
-    this.patch("/tasks/:id");
-    this.del("/tasks/:id");
+    this.resource("tasks", {
+      only: ["index", "create", "update", "delete"],
+    });
 
     this.get("/summary", (schema) => {
       const tasks = schema.tasks.all().models;

@@ -109,33 +109,49 @@ createServer({
 });
 ```
 
-Conventional CRUD routes can omit their handlers. Kajo infers the schema
-collection from the route and normalizes rooted JSON request bodies:
+Routes can be defined at three levels. Use a custom handler when an endpoint
+has application-specific behavior:
 
 ```ts
-createServer({
-  models,
-  routes() {
-    this.get("/posts");
-    this.get("/posts/:id");
-    this.post("/posts");
-    this.patch("/posts/:id");
-    this.del("/posts/:id");
-  },
+this.get("/posts/search", (schema, request) => {
+  return schema.posts.where({ title: request.queryParams.title });
 });
 ```
 
-Register the same CRUD routes together with `resource()`:
+For conventional CRUD behavior, omit the handler. Kajo infers the schema
+collection from the route and normalizes rooted JSON request bodies. Pass a
+collection name when the URL and schema do not match:
 
 ```ts
-createServer({
-  models,
-  routes() {
-    this.resource("posts");
-    this.resource("users", { only: ["index", "show"] });
-  },
+this.get("/posts");
+this.get("/posts/:id");
+this.get("/articles", "posts");
+this.post("/posts");
+this.patch("/posts/:id");
+this.del("/posts/:id");
+```
+
+Use `resource()` to register a complete CRUD resource:
+
+```ts
+this.resource("posts");
+this.resource("users", { only: ["index", "show"] });
+this.resource("blog-posts", {
+  except: ["delete"],
+  path: "/articles",
 });
 ```
+
+| Action   | Registered routes                    |
+| -------- | ------------------------------------ |
+| `index`  | `GET /posts`                         |
+| `show`   | `GET /posts/:id`                     |
+| `create` | `POST /posts`                        |
+| `update` | `PUT /posts/:id`, `PATCH /posts/:id` |
+| `delete` | `DELETE /posts/:id`                  |
+
+`only` and `except` are mutually exclusive. A custom `path` changes the URL
+without changing the schema collection.
 
 Missing shorthand records return `404`, malformed shorthand payloads return
 `400`, and custom handlers can throw `new HttpError(status, message)` for

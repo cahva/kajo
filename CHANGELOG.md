@@ -28,7 +28,7 @@ and this project adheres to
 - Conventional CRUD route shorthands with inferred or explicit schema
   collections and normalized JSON request bodies.
 - Runnable vanilla TypeScript task-board example covering browser interception,
-  relationships, serializers, custom handlers, and CRUD shorthands.
+  relationships, serializers, a CRUD resource, and custom handlers.
 - Typed factories with sequences, dependent attributes, traits, overrides, and
   list creation.
 - Base and trait-specific factory `afterCreate` hooks.
