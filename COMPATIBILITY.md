@@ -64,7 +64,7 @@ change before the first stable version.
 | `belongsTo` and `hasMany`                                          | **Supported** | Includes inverse discovery, explicit inverses, and synchronized foreign keys.       |
 | Relationship ID properties and association helpers                 | **Supported** | Includes typed setters and `new<Name>`/`create<Name>` helpers.                      |
 | Polymorphic relationships                                          | **Planned**   | Requires typed unions and serializer support.                                       |
-| Relationship-dependent deletion behavior                           | **Partial**   | Core synchronization works; broader parity cases need a compatibility suite.        |
+| Relationship-dependent deletion behavior                           | **Supported** | Destroy clears belongs-to and stored has-many references on dependent models.       |
 
 ## Factories and data setup
 

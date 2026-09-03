@@ -117,6 +117,9 @@ draft.save(); // associates the saved post with user
 const post = user.createPost({ title: "A different light" });
 ```
 
+Destroying a model automatically clears foreign keys and stored ID references
+from dependent models, preventing dangling relationships.
+
 Models and collections pass through an application or model-specific
 `Serializer`. Serializers control root keys, selected attributes, key
 transforms, relationship IDs, sideloading, and embedding:

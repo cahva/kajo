@@ -289,6 +289,85 @@ describe("relationships", () => {
     expect(tag.posts.length).toBe(0);
   });
 
+  test("clears belongsTo dependents when the target is destroyed", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        post: model<Post>().extend({
+          author: belongsTo("user"),
+        }),
+        user: model<User>().extend({
+          posts: hasMany("post"),
+        }),
+      },
+    });
+    const user = server.schema.users.create({ name: "Ada" });
+    const post = server.schema.posts.create({
+      author: user,
+      title: "Typed APIs",
+    });
+
+    user.destroy();
+
+    expect(post.author).toBeNull();
+    expect(post.authorId).toBeNull();
+    expect(server.db.posts.find(post.id)).toEqual({
+      id: post.id,
+      title: "Typed APIs",
+    });
+  });
+
+  test("removes destroyed targets from stored hasMany ids", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        post: model<Post>().extend({
+          tags: hasMany("tag", { inverse: null }),
+        }),
+        tag: model<{ name: string }>(),
+      },
+    });
+    const typescript = server.schema.tags.create({ name: "TypeScript" });
+    const testing = server.schema.tags.create({ name: "Testing" });
+    const post = server.schema.posts.create({
+      tags: [typescript, testing],
+      title: "Reliable mocks",
+    });
+
+    typescript.destroy();
+
+    expect(post.tagIds).toEqual([testing.id]);
+    expect(post.tags.models.map(({ name }) => name)).toEqual(["Testing"]);
+    expect(server.db.posts.find(post.id)).toMatchObject({
+      tagIds: [testing.id],
+    });
+  });
+
+  test("cleans both sides of a many-to-many relationship on destroy", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        post: model<Post>().extend({
+          tags: hasMany("tag", { inverse: "posts" }),
+        }),
+        tag: model<{ name: string }>().extend({
+          posts: hasMany("post", { inverse: "tags" }),
+        }),
+      },
+    });
+    const tag = server.schema.tags.create({ name: "TypeScript" });
+    const post = server.schema.posts.create({
+      tags: [tag],
+      title: "Typed relationships",
+    });
+
+    tag.destroy();
+
+    expect(post.tags.length).toBe(0);
+    expect(post.tagIds).toEqual([]);
+    expect(server.db.posts.find(post.id)).toMatchObject({ tagIds: [] });
+  });
+
   test("rejects invalid relationship configuration", () => {
     expect(() =>
       createServer({

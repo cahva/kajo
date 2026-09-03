@@ -607,6 +607,7 @@ function createModel<
     },
     modelName,
     destroy() {
+      disassociateDependents(modelName, record, models, schema());
       collection.remove(record.id);
       isDestroyed = true;
     },
@@ -752,7 +753,9 @@ function createNewModel<
     modelName,
     destroy() {
       if (persisted) {
-        collection.remove((record as StoredRecord<Attributes>).id);
+        const storedRecord = record as StoredRecord<Attributes>;
+        disassociateDependents(modelName, storedRecord, models, schema());
+        collection.remove(storedRecord.id);
         isDestroyed = true;
       }
     },
@@ -1224,6 +1227,50 @@ function setRelationship<Models extends ModelRegistry>(
       }
 
       Reflect.set(target.attrs, inverseKey, [...inverseIds]);
+    }
+  }
+}
+
+function disassociateDependents<Models extends ModelRegistry>(
+  targetModelName: string,
+  targetRecord: StoredRecord<object>,
+  models: Models,
+  schema: Schema<DatabaseData, Models>,
+): void {
+  for (const [ownerModelName, definition] of Object.entries(models)) {
+    const ownerCollection = schema.db[pluralize(ownerModelName)] as
+      | DatabaseCollection<object>
+      | undefined;
+
+    if (!ownerCollection) {
+      continue;
+    }
+
+    for (const [relationshipName, relationship] of Object.entries(definition.relationships)) {
+      if (relationship.modelName !== targetModelName) {
+        continue;
+      }
+
+      const relationshipKey = foreignKey(relationshipName, relationship);
+
+      for (const ownerRecord of ownerCollection) {
+        if (relationship.kind === "belongsTo") {
+          if (String(Reflect.get(ownerRecord, relationshipKey)) === targetRecord.id) {
+            Reflect.deleteProperty(ownerRecord, relationshipKey);
+          }
+          continue;
+        }
+
+        const ids = Reflect.get(ownerRecord, relationshipKey);
+
+        if (Array.isArray(ids)) {
+          Reflect.set(
+            ownerRecord,
+            relationshipKey,
+            ids.map(String).filter((id) => id !== targetRecord.id),
+          );
+        }
+      }
     }
   }
 }
