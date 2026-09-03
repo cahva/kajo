@@ -393,30 +393,51 @@ export interface NewModelInstance<
   update(attributes: UpdateAttributes<Attributes>): Model<Attributes, Models, Relationships>;
 }
 
-/**
- * A result containing zero or more model instances.
- */
-export class Collection<
-  Attributes extends object,
-  Models extends ModelRegistry = {},
-  Relationships extends RelationshipRegistry = {},
-> implements Iterable<Model<Attributes, Models, Relationships>> {
-  readonly #saveMembership?: (models: Model<Attributes, Models, Relationships>[]) => void;
+type PolymorphicModelFor<
+  Models extends ModelRegistry,
+  Targets extends readonly string[],
+> = ModelFor<Models, Targets[number]>;
 
-  constructor(
-    readonly modelName: string,
-    readonly models: Model<Attributes, Models, Relationships>[],
-    saveMembership?: (models: Model<Attributes, Models, Relationships>[]) => void,
+type PolymorphicUpdateAttributes<
+  Models extends ModelRegistry,
+  Targets extends readonly string[],
+> = {
+  [Key in keyof ModelAttributes<Models[Targets[number] & keyof Models]>]?: ModelAttributes<
+    Models[Targets[number] & keyof Models]
+  >[Key];
+};
+
+interface CollectionMember<Serialized extends object> {
+  readonly id: string;
+  readonly modelName: string;
+  destroy(): void;
+  reload(): unknown;
+  save(): unknown;
+  toJSON(): Serialized;
+}
+
+abstract class CollectionBase<
+  Member extends CollectionMember<Serialized>,
+  CollectionType,
+  Serialized extends object,
+> implements Iterable<Member> {
+  readonly #saveMembership?: (models: Member[]) => void;
+
+  protected constructor(
+    readonly models: Member[],
+    saveMembership?: (models: Member[]) => void,
   ) {
     this.#saveMembership = saveMembership;
   }
+
+  protected abstract readonly description: string;
 
   get length(): number {
     return this.models.length;
   }
 
-  add(model: Model<Attributes, Models, Relationships>): this {
-    this.#assertCompatible(model);
+  add(model: Member): this {
+    this.assertCompatible(model);
 
     if (!this.includes(model)) {
       this.models.push(model);
@@ -431,33 +452,20 @@ export class Collection<
     }
   }
 
-  filter(
-    callback: (
-      model: Model<Attributes, Models, Relationships>,
-      index: number,
-      collection: this,
-    ) => boolean,
-  ): Collection<Attributes, Models, Relationships> {
-    return new Collection(
-      this.modelName,
-      this.models.filter((model, index) => callback(model, index, this)),
-    );
+  filter(callback: (model: Member, index: number, collection: this) => boolean): CollectionType {
+    return this.clone(this.models.filter((model, index) => callback(model, index, this)));
   }
 
-  includes(model: Model<Attributes, Models, Relationships>): boolean {
+  includes(model: Member): boolean {
     return this.models.some(
       (candidate) => candidate.modelName === model.modelName && candidate.id === model.id,
     );
   }
 
-  mergeCollection(collection: Collection<Attributes, Models, Relationships>): this {
-    if (collection.modelName !== this.modelName) {
-      throw new TypeError(
-        `Cannot merge collection:${collection.modelName} into collection:${this.modelName}.`,
-      );
-    }
+  mergeCollection(collection: CollectionType): this {
+    this.assertCollectionCompatible(collection);
 
-    for (const model of collection) {
+    for (const model of this.collectionMembers(collection)) {
       this.add(model);
     }
 
@@ -472,7 +480,7 @@ export class Collection<
     return this;
   }
 
-  remove(model: Model<Attributes, Models, Relationships>): this {
+  remove(model: Member): this {
     const index = this.models.findIndex(
       (candidate) => candidate.modelName === model.modelName && candidate.id === model.id,
     );
@@ -493,27 +501,64 @@ export class Collection<
     return this;
   }
 
-  slice(begin?: number, end?: number): Collection<Attributes, Models, Relationships> {
-    return new Collection(this.modelName, this.models.slice(begin, end));
+  slice(begin?: number, end?: number): CollectionType {
+    return this.clone(this.models.slice(begin, end));
   }
 
-  sort(
-    callback: (
-      left: Model<Attributes, Models, Relationships>,
-      right: Model<Attributes, Models, Relationships>,
-    ) => number,
-  ): Collection<Attributes, Models, Relationships> {
-    return new Collection(this.modelName, [...this.models].sort(callback));
+  sort(callback: (left: Member, right: Member) => number): CollectionType {
+    return this.clone([...this.models].sort(callback));
   }
 
-  toJSON(): StoredRecord<Attributes>[] {
+  toJSON(): Serialized[] {
     return this.models.map((instance) => instance.toJSON());
   }
 
   toString(): string {
-    return `collection:${this.modelName}(${this.models
+    return `${this.description}(${this.models
       .map((model) => `${model.modelName}:${model.id}`)
       .join(",")})`;
+  }
+
+  [Symbol.iterator](): Iterator<Member> {
+    return this.models[Symbol.iterator]();
+  }
+
+  protected abstract assertCollectionCompatible(collection: CollectionType): void;
+  protected abstract assertCompatible(model: Member): void;
+  protected abstract clone(models: Member[]): CollectionType;
+  protected abstract collectionMembers(collection: CollectionType): Iterable<Member>;
+
+  protected updateAll(attributes: object): this {
+    for (const model of this.models) {
+      const update = Reflect.get(model, "update") as (attributes: object) => unknown;
+      Reflect.apply(update, model, [attributes]);
+    }
+
+    return this;
+  }
+}
+
+/**
+ * A result containing zero or more model instances.
+ */
+export class Collection<
+  Attributes extends object,
+  Models extends ModelRegistry = {},
+  Relationships extends RelationshipRegistry = {},
+> extends CollectionBase<
+  Model<Attributes, Models, Relationships>,
+  Collection<Attributes, Models, Relationships>,
+  StoredRecord<Attributes>
+> {
+  protected readonly description: string;
+
+  constructor(
+    readonly modelName: string,
+    models: Model<Attributes, Models, Relationships>[],
+    saveMembership?: (models: Model<Attributes, Models, Relationships>[]) => void,
+  ) {
+    super(models, saveMembership);
+    this.description = `collection:${modelName}`;
   }
 
   update(attributes: UpdateAttributes<Attributes>): this;
@@ -529,40 +574,39 @@ export class Collection<
       typeof attributesOrKey === "object"
         ? attributesOrKey
         : ({ [attributesOrKey]: value } as UpdateAttributes<Attributes>);
+    return this.updateAll(attributes);
+  }
 
-    for (const model of this.models) {
-      model.update(attributes);
+  protected assertCollectionCompatible(
+    collection: Collection<Attributes, Models, Relationships>,
+  ): void {
+    if (collection.modelName !== this.modelName) {
+      throw new TypeError(
+        `Cannot merge collection:${collection.modelName} into collection:${this.modelName}.`,
+      );
     }
-
-    return this;
   }
 
-  [Symbol.iterator](): Iterator<Model<Attributes, Models, Relationships>> {
-    return this.models[Symbol.iterator]();
-  }
-
-  #assertCompatible(model: Model<Attributes, Models, Relationships>): void {
+  protected assertCompatible(model: Model<Attributes, Models, Relationships>): void {
     if (model.modelName !== this.modelName) {
       throw new TypeError(
         `Cannot add ${model.modelName}:${model.id} to collection:${this.modelName}.`,
       );
     }
   }
+
+  protected clone(
+    models: Model<Attributes, Models, Relationships>[],
+  ): Collection<Attributes, Models, Relationships> {
+    return new Collection(this.modelName, models);
+  }
+
+  protected collectionMembers(
+    collection: Collection<Attributes, Models, Relationships>,
+  ): Iterable<Model<Attributes, Models, Relationships>> {
+    return collection;
+  }
 }
-
-type PolymorphicModelFor<
-  Models extends ModelRegistry,
-  Targets extends readonly string[],
-> = ModelFor<Models, Targets[number]>;
-
-type PolymorphicUpdateAttributes<
-  Models extends ModelRegistry,
-  Targets extends readonly string[],
-> = {
-  [Key in keyof ModelAttributes<Models[Targets[number] & keyof Models]>]?: ModelAttributes<
-    Models[Targets[number] & keyof Models]
-  >[Key];
-};
 
 /**
  * A heterogeneous result from a polymorphic to-many relationship.
@@ -570,114 +614,19 @@ type PolymorphicUpdateAttributes<
 export class PolymorphicCollection<
   Models extends ModelRegistry,
   Targets extends readonly string[] = readonly string[],
-> implements Iterable<PolymorphicModelFor<Models, Targets>> {
-  readonly #saveMembership?: (models: PolymorphicModelFor<Models, Targets>[]) => void;
+> extends CollectionBase<
+  PolymorphicModelFor<Models, Targets>,
+  PolymorphicCollection<Models, Targets>,
+  StoredRecord<object>
+> {
+  protected readonly description = "polymorphicCollection";
 
   constructor(
     readonly modelNames: Targets,
-    readonly models: PolymorphicModelFor<Models, Targets>[],
+    models: PolymorphicModelFor<Models, Targets>[],
     saveMembership?: (models: PolymorphicModelFor<Models, Targets>[]) => void,
   ) {
-    this.#saveMembership = saveMembership;
-  }
-
-  get length(): number {
-    return this.models.length;
-  }
-
-  add(model: PolymorphicModelFor<Models, Targets>): this {
-    this.#assertCompatible(model);
-
-    if (!this.includes(model)) {
-      this.models.push(model);
-    }
-
-    return this;
-  }
-
-  destroy(): void {
-    for (const model of this.models) {
-      model.destroy();
-    }
-  }
-
-  filter(
-    callback: (
-      model: PolymorphicModelFor<Models, Targets>,
-      index: number,
-      collection: this,
-    ) => boolean,
-  ): PolymorphicCollection<Models, Targets> {
-    return new PolymorphicCollection(
-      this.modelNames,
-      this.models.filter((model, index) => callback(model, index, this)),
-    );
-  }
-
-  includes(model: PolymorphicModelFor<Models, Targets>): boolean {
-    return this.models.some(
-      (candidate) => candidate.modelName === model.modelName && candidate.id === model.id,
-    );
-  }
-
-  mergeCollection(collection: PolymorphicCollection<Models, Targets>): this {
-    for (const model of collection) {
-      this.add(model);
-    }
-
-    return this;
-  }
-
-  reload(): this {
-    for (const model of this.models) {
-      model.reload();
-    }
-
-    return this;
-  }
-
-  remove(model: PolymorphicModelFor<Models, Targets>): this {
-    const index = this.models.findIndex(
-      (candidate) => candidate.modelName === model.modelName && candidate.id === model.id,
-    );
-
-    if (index !== -1) {
-      this.models.splice(index, 1);
-    }
-
-    return this;
-  }
-
-  save(): this {
-    for (const model of this.models) {
-      model.save();
-    }
-
-    this.#saveMembership?.(this.models);
-    return this;
-  }
-
-  slice(begin?: number, end?: number): PolymorphicCollection<Models, Targets> {
-    return new PolymorphicCollection(this.modelNames, this.models.slice(begin, end));
-  }
-
-  sort(
-    callback: (
-      left: PolymorphicModelFor<Models, Targets>,
-      right: PolymorphicModelFor<Models, Targets>,
-    ) => number,
-  ): PolymorphicCollection<Models, Targets> {
-    return new PolymorphicCollection(this.modelNames, [...this.models].sort(callback));
-  }
-
-  toJSON(): StoredRecord<object>[] {
-    return this.models.map((instance) => instance.toJSON());
-  }
-
-  toString(): string {
-    return `polymorphicCollection(${this.models
-      .map((model) => `${model.modelName}:${model.id}`)
-      .join(",")})`;
+    super(models, saveMembership);
   }
 
   update<Attributes extends PolymorphicUpdateAttributes<Models, Targets>>(
@@ -699,19 +648,23 @@ export class PolymorphicCollection<
   ): this {
     const attributes =
       typeof attributesOrKey === "object" ? attributesOrKey : { [attributesOrKey]: value };
+    return this.updateAll(attributes);
+  }
 
-    for (const model of this.models) {
-      Reflect.apply(Reflect.get(model, "update"), model, [attributes]);
+  protected assertCollectionCompatible(collection: PolymorphicCollection<Models, Targets>): void {
+    if (
+      collection.modelNames.length !== this.modelNames.length ||
+      collection.modelNames.some((modelName) => !this.modelNames.includes(modelName))
+    ) {
+      throw new TypeError(
+        `Cannot merge a polymorphic collection accepting ${collection.modelNames.join(
+          ", ",
+        )} into one accepting ${this.modelNames.join(", ")}.`,
+      );
     }
-
-    return this;
   }
 
-  [Symbol.iterator](): Iterator<PolymorphicModelFor<Models, Targets>> {
-    return this.models[Symbol.iterator]();
-  }
-
-  #assertCompatible(model: PolymorphicModelFor<Models, Targets>): void {
+  protected assertCompatible(model: PolymorphicModelFor<Models, Targets>): void {
     if (!this.modelNames.includes(model.modelName)) {
       throw new TypeError(
         `Cannot add ${model.modelName}:${model.id} to a polymorphic collection accepting ${this.modelNames.join(
@@ -719,6 +672,18 @@ export class PolymorphicCollection<
         )}.`,
       );
     }
+  }
+
+  protected clone(
+    models: PolymorphicModelFor<Models, Targets>[],
+  ): PolymorphicCollection<Models, Targets> {
+    return new PolymorphicCollection(this.modelNames, models);
+  }
+
+  protected collectionMembers(
+    collection: PolymorphicCollection<Models, Targets>,
+  ): Iterable<PolymorphicModelFor<Models, Targets>> {
+    return collection;
   }
 }
 

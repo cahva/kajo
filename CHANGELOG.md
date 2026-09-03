@@ -76,6 +76,11 @@ and this project adheres to
 - A separate headless Chromium suite covering real Fetch and XMLHttpRequest
   interception.
 
+### Changed
+
+- Unified homogeneous and polymorphic collection behavior behind one internal
+  implementation while retaining target-specific compatibility checks.
+
 ### Fixed
 
 - Added an unambiguous root command for launching the task-board example.

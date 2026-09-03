@@ -345,6 +345,29 @@ describe("polymorphic relationships", () => {
     expect(watch.make).toBe("Kajo");
   });
 
+  test("rejects merging polymorphic collections with different target sets", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        car: model<{ make: string }>(),
+        bucket: model<{ name: string }>().extend({
+          items: hasMany(["car", "post"] as const, { inverse: null }),
+        }),
+        post: model<Post>(),
+        user: model<User>().extend({
+          things: hasMany(["car", "watch"] as const, { inverse: null }),
+        }),
+        watch: model<{ make: string }>(),
+      },
+    });
+    const things = server.schema.users.create({ name: "Ada" }).things;
+    const items = server.schema.buckets.create({ name: "Favorites" }).items;
+
+    expect(() => things.mergeCollection(items as never)).toThrow(
+      "Cannot merge a polymorphic collection accepting car, post into one accepting car, watch.",
+    );
+  });
+
   test("rejects invalid polymorphic members when constructing an unsaved model", () => {
     const server = createServer({
       intercept: false,
