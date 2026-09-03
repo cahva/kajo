@@ -197,3 +197,55 @@ test("server fixtures and seeds are available to route handlers", async () => {
     title: "Interstellar",
   });
 });
+
+test("reloads all or selected configured fixtures", () => {
+  const server = createServer({
+    fixtures: {
+      movies: [{ title: "Arrival" }],
+      users: [{ name: "Ada" }],
+    },
+    intercept: false,
+  });
+
+  server.db.emptyData();
+  server.loadFixtures("users");
+
+  expect(server.db.movies.length).toBe(0);
+  expect([...server.db.users]).toEqual([{ id: "1", name: "Ada" }]);
+
+  server.loadFixtures("movies");
+
+  expect([...server.db.movies]).toEqual([{ id: "1", title: "Arrival" }]);
+
+  server.db.emptyData();
+  server.loadFixtures();
+
+  expect(server.db.dump()).toEqual({
+    movies: [{ id: "1", title: "Arrival" }],
+    users: [{ id: "1", name: "Ada" }],
+  });
+});
+
+test("preserves existing data and reports unknown fixture collections", () => {
+  const server = createServer({
+    fixtures: {
+      movies: [{ title: "Arrival" }],
+    },
+    intercept: false,
+  });
+
+  server.db.movies.insert({ title: "Interstellar" });
+  server.loadFixtures("movies");
+
+  expect([...server.db.movies]).toEqual([
+    { id: "1", title: "Arrival" },
+    { id: "2", title: "Interstellar" },
+    { id: "3", title: "Arrival" },
+  ]);
+  const untypedServer = server as unknown as {
+    loadFixtures(...fixtureNames: string[]): void;
+  };
+  expect(() => untypedServer.loadFixtures("missing")).toThrow(
+    'No fixture collection named "missing" is configured.',
+  );
+});

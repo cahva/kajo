@@ -79,7 +79,7 @@ change before the first stable version.
 | `create` and `createList`                         | **Supported** | Return model types inferred from the model registry.                                          |
 | Automatic dependency ordering and cycle detection | **Partial**   | Association cycles are diagnosed; arbitrary dependent-attribute ordering is not yet resolved. |
 | Fixtures and seeds                                | **Supported** | Fixtures initialize collections and seeds can build additional state.                         |
-| Selective `loadFixtures()`                        | **Planned**   | Direct `db.loadData()` is available today.                                                    |
+| Selective `loadFixtures()`                        | **Supported** | Loads all configured fixtures or a typed collection-name subset.                              |
 
 ## Serializers
 
@@ -120,7 +120,7 @@ These are behavioral inputs, not commitments to preserve Mirage internals.
 
 ## Prioritized compatibility work
 
-1. Add selective fixture loading and finish factory dependency ordering.
+1. Finish factory dependency ordering.
 2. Add request normalization helpers and decide coalesced request behavior.
 3. Add polymorphic `hasMany` if issue research demonstrates a current use case.
 4. Expand the issue-driven regression suite before declaring a stable API.

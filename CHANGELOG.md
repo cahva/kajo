@@ -42,6 +42,8 @@ and this project adheres to
   relationships, serializers, a CRUD resource, and custom handlers.
 - Typed factories with sequences, dependent attributes, traits, overrides, and
   list creation.
+- Typed `loadFixtures()` support for restoring all configured fixtures or a
+  selected set of fixture collections.
 - Base and trait-specific factory `afterCreate` hooks.
 - Declarative belongs-to factory associations with associated traits, override
   precedence, and cycle diagnostics.

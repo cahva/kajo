@@ -126,6 +126,7 @@ export class Server<
   readonly #boundary = new RequestBoundary();
   readonly #serializers: SerializerRegistry;
   readonly #factories: FactoryRegistry<Models>;
+  readonly #fixtures: Fixtures;
   readonly #models: Models;
   readonly #factorySequences = new Map<string, number>();
   readonly #factoryStack: string[] = [];
@@ -189,6 +190,7 @@ export class Server<
     this.#unhandledRequest = options.unhandledRequest ?? "error";
     this.#serializers = options.serializers ?? {};
     this.#factories = options.factories ?? {};
+    this.#fixtures = (options.fixtures ?? {}) as Fixtures;
     this.#models = (options.models ?? {}) as Models;
     this.#trackRequests = options.trackRequests ?? false;
     const identityManagers = Object.fromEntries(
@@ -211,6 +213,29 @@ export class Server<
     if (options.intercept !== false) {
       this.#interceptor = interceptRequests((request) => this.#handleIntercepted(request));
     }
+  }
+
+  /**
+   * Load all configured fixtures, or only the named fixture collections.
+   *
+   * Existing records are preserved. Call `db.emptyData()` first when restoring
+   * the configured fixture state from scratch.
+   */
+  loadFixtures(...fixtureNames: readonly (keyof Fixtures & string)[]): void {
+    const names = fixtureNames.length > 0 ? fixtureNames : Object.keys(this.#fixtures);
+    const selected: Partial<Fixtures> = {};
+
+    for (const name of names) {
+      const records = this.#fixtures[name];
+
+      if (!records) {
+        throw new Error(`No fixture collection named "${name}" is configured.`);
+      }
+
+      selected[name] = records;
+    }
+
+    this.db.loadData(selected as Partial<ServerTables<Fixtures, Models>>);
   }
 
   /**

@@ -75,6 +75,25 @@ collections support `find`, `findBy`, `where`, `insert`, `firstOrCreate`,
 `update`, and `remove`. Use `loadData`, `emptyData`, and `dump` to manage the
 database as a whole.
 
+Configured fixtures load when the server is created and can be restored later,
+either together or as a typed subset:
+
+```ts
+const server = createServer({
+  fixtures: {
+    movies: [{ title: "Arrival" }],
+    users: [{ name: "Ada" }],
+  },
+});
+
+server.db.emptyData();
+server.loadFixtures("movies"); // "movies" | "users"
+server.loadFixtures(); // load every configured fixture collection
+```
+
+`loadFixtures()` appends to existing collections. Call `db.emptyData()` first
+when restoring a clean fixture state.
+
 Use an application-wide or per-model identity manager when the simulated
 backend uses UUIDs, slugs, or another ID format:
 
