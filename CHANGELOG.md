@@ -19,6 +19,8 @@ and this project adheres to
 - Automatic Fetch and XMLHttpRequest interception with network passthrough.
 - Typed in-memory collections with fixtures, seeds, generated IDs, queries,
   mutations, and reset behavior.
+- Application-wide and per-model custom identity managers for backend-specific
+  IDs.
 - Typed model definitions, schema collections, persisted model instances, and
   automatic model response serialization.
 - Unsaved model lifecycle with `new`, `save`, `update`, `isNew`, and `isSaved`,

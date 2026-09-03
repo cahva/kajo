@@ -1,5 +1,38 @@
 import { describe, expect, test } from "vite-plus/test";
-import { createDatabase, createServer } from "../src/index.ts";
+import { createDatabase, createServer, type IdentityManagerContract, model } from "../src/index.ts";
+
+class PrefixedIdentityManager implements IdentityManagerContract {
+  readonly #ids = new Set<string>();
+  #nextId = 1;
+
+  fetch(): string {
+    let id = `test-${this.#nextId}`;
+
+    while (this.#ids.has(id)) {
+      this.#nextId += 1;
+      id = `test-${this.#nextId}`;
+    }
+
+    this.#ids.add(id);
+    this.#nextId += 1;
+    return id;
+  }
+
+  set(id: number | string): void {
+    const normalizedId = String(id);
+
+    if (this.#ids.has(normalizedId)) {
+      throw new Error(`Duplicate custom id "${normalizedId}".`);
+    }
+
+    this.#ids.add(normalizedId);
+  }
+
+  reset(): void {
+    this.#ids.clear();
+    this.#nextId = 1;
+  }
+}
 
 describe("database collections", () => {
   test("loads records and assigns deterministic string ids", () => {
@@ -96,6 +129,49 @@ describe("database collections", () => {
       'The id "custom" is already in use.',
     );
   });
+
+  test("uses and resets collection-specific identity managers", () => {
+    const db = createDatabase(
+      {
+        users: [{ id: "imported", name: "Link" }],
+      },
+      {
+        identityManagers: {
+          users: PrefixedIdentityManager,
+        },
+      },
+    );
+
+    expect(db.users.insert({ name: "Zelda" }).id).toBe("test-1");
+    expect(() => db.users.insert({ id: "imported", name: "Dark Link" })).toThrow(
+      'The id "imported" is already in use.',
+    );
+
+    db.emptyData();
+
+    expect(db.users.insert({ name: "Epona" }).id).toBe("test-1");
+  });
+});
+
+test("server identity managers support application and per-model defaults", () => {
+  const server = createServer({
+    identityManagers: {
+      application: PrefixedIdentityManager,
+      movie: class extends PrefixedIdentityManager {
+        override fetch(): string {
+          return `movie-${super.fetch()}`;
+        }
+      },
+    },
+    intercept: false,
+    models: {
+      movie: model<{ title: string }>(),
+      user: model<{ name: string }>(),
+    },
+  });
+
+  expect(server.schema.movies.create({ title: "Arrival" }).id).toBe("movie-test-1");
+  expect(server.schema.users.create({ name: "Ada" }).id).toBe("test-1");
 });
 
 test("server fixtures and seeds are available to route handlers", async () => {

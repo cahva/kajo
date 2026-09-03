@@ -4,13 +4,16 @@
  * @module
  */
 
-export { createDatabase } from "./database.ts";
+export { createDatabase, IdentityManager } from "./database.ts";
 export type {
   Database,
   DatabaseApi,
   DatabaseCollection,
   DatabaseCollections,
   DatabaseData,
+  DatabaseOptions,
+  IdentityManagerConstructor,
+  IdentityManagerContract,
   InsertableRecord,
   RecordQuery,
   StoredRecord,
@@ -74,6 +77,7 @@ export type {
 export { createServer, Server } from "./server.ts";
 export type {
   FactoryRegistry,
+  IdentityManagerRegistry,
   PassthroughOptions,
   ResourceAction,
   ResourceOptions,

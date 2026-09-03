@@ -1,5 +1,29 @@
 export type DatabaseData = Record<string, readonly object[]>;
 
+export interface IdentityManagerContract {
+  /** Return and reserve an unused identifier. */
+  fetch(): number | string;
+  /** Reserve an explicitly supplied identifier, throwing when it is already used. */
+  set(id: number | string): void;
+  /** Mark every identifier as unused. */
+  reset(): void;
+}
+
+export type IdentityManagerConstructor = new () => IdentityManagerContract;
+
+export interface DatabaseOptions {
+  /**
+   * Identity manager constructors keyed by collection name.
+   *
+   * `application` is the fallback for collections without an explicit manager.
+   */
+  readonly identityManagers?: Readonly<
+    Record<string, IdentityManagerConstructor | undefined> & {
+      readonly application?: IdentityManagerConstructor;
+    }
+  >;
+}
+
 export type StoredRecord<RecordType extends object> = Omit<RecordType, "id"> & {
   id: string;
 };
@@ -63,15 +87,15 @@ export interface DatabaseApi<Tables extends DatabaseData> {
   loadData(data: Partial<Tables>): void;
 }
 
-class IdentityManager {
+export class IdentityManager implements IdentityManagerContract {
   readonly #ids = new Set<string>();
   #nextId = 1;
 
-  fetch(id?: number | string): string {
-    if (id === undefined) {
-      return this.#generate();
-    }
+  fetch(): string {
+    return this.#generate();
+  }
 
+  set(id: number | string): void {
     const normalizedId = String(id);
 
     if (this.#ids.has(normalizedId)) {
@@ -80,7 +104,6 @@ class IdentityManager {
 
     this.#ids.add(normalizedId);
     this.#advancePast(normalizedId);
-    return normalizedId;
   }
 
   reset(): void {
@@ -107,8 +130,12 @@ class IdentityManager {
 }
 
 class DatabaseCollectionImpl<RecordType extends object> {
-  readonly #identityManager = new IdentityManager();
+  readonly #identityManager: IdentityManagerContract;
   readonly #records: StoredRecord<RecordType>[] = [];
+
+  constructor(identityManager: IdentityManagerContract) {
+    this.#identityManager = identityManager;
+  }
 
   get length(): number {
     return this.#records.length;
@@ -218,9 +245,20 @@ class DatabaseCollectionImpl<RecordType extends object> {
 
   #insertOne(input: InsertableRecord<RecordType>): StoredRecord<RecordType> {
     const { id: requestedId, ...attributes } = input;
+    const id =
+      requestedId === undefined ? String(this.#identityManager.fetch()) : String(requestedId);
+
+    if (this.#records.some((record) => record.id === id)) {
+      throw new Error(`The id "${id}" is already in use.`);
+    }
+
+    if (requestedId !== undefined) {
+      this.#identityManager.set(id);
+    }
+
     const record = {
       ...attributes,
-      id: this.#identityManager.fetch(requestedId),
+      id,
     } as StoredRecord<RecordType>;
 
     this.#records.push(record);
@@ -241,6 +279,11 @@ class DatabaseCollectionImpl<RecordType extends object> {
 
 class DatabaseImpl<Tables extends DatabaseData> implements DatabaseApi<Tables> {
   readonly #collections = new Map<string, DatabaseCollectionImpl<object>>();
+  readonly #options: DatabaseOptions;
+
+  constructor(options: DatabaseOptions) {
+    this.#options = options;
+  }
 
   createCollection<Name extends string, RecordType extends object>(
     name: Name,
@@ -253,7 +296,11 @@ class DatabaseImpl<Tables extends DatabaseData> implements DatabaseApi<Tables> {
       return existing as unknown as DatabaseCollection<RecordType>;
     }
 
-    const collection = createCollection<RecordType>();
+    const Manager =
+      this.#options.identityManagers?.[name] ??
+      this.#options.identityManagers?.application ??
+      IdentityManager;
+    const collection = createCollection<RecordType>(new Manager());
     collection.insert(initialData);
     this.#collections.set(name, collection as unknown as DatabaseCollectionImpl<object>);
     return collection;
@@ -295,8 +342,9 @@ class DatabaseImpl<Tables extends DatabaseData> implements DatabaseApi<Tables> {
 
 export function createDatabase<Tables extends DatabaseData = DatabaseData>(
   initialData?: Tables,
+  options: DatabaseOptions = {},
 ): Database<Tables> {
-  const database = new DatabaseImpl<Tables>();
+  const database = new DatabaseImpl<Tables>(options);
   const proxy = new Proxy(database, {
     get(target, property) {
       if (typeof property === "string") {
@@ -329,9 +377,10 @@ export function createDatabase<Tables extends DatabaseData = DatabaseData>(
   return proxy;
 }
 
-function createCollection<RecordType extends object>(): DatabaseCollection<RecordType> &
-  DatabaseCollectionImpl<RecordType> {
-  const collection = new DatabaseCollectionImpl<RecordType>();
+function createCollection<RecordType extends object>(
+  identityManager: IdentityManagerContract,
+): DatabaseCollection<RecordType> & DatabaseCollectionImpl<RecordType> {
+  const collection = new DatabaseCollectionImpl<RecordType>(identityManager);
 
   return new Proxy(collection, {
     get(target, property) {

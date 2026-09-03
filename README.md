@@ -74,6 +74,51 @@ collections support `find`, `findBy`, `where`, `insert`, `firstOrCreate`,
 `update`, and `remove`. Use `loadData`, `emptyData`, and `dump` to manage the
 database as a whole.
 
+Use an application-wide or per-model identity manager when the simulated
+backend uses UUIDs, slugs, or another ID format:
+
+```ts
+class TestIds {
+  #ids = new Set<string>();
+  #nextId = 1;
+
+  fetch() {
+    let id = `test-${this.#nextId++}`;
+
+    while (this.#ids.has(id)) {
+      id = `test-${this.#nextId++}`;
+    }
+
+    this.#ids.add(id);
+    return id;
+  }
+
+  set(id: string | number) {
+    const value = String(id);
+    if (this.#ids.has(value)) throw new Error(`Duplicate id: ${value}`);
+    this.#ids.add(value);
+  }
+
+  reset() {
+    this.#ids.clear();
+    this.#nextId = 1;
+  }
+}
+
+createServer({
+  identityManagers: {
+    application: TestIds,
+    // movie: MovieSpecificIds,
+  },
+  models: {
+    movie: model<Movie>(),
+  },
+});
+```
+
+Kajo normalizes generated and supplied IDs to strings. Each collection gets
+its own manager instance, and `db.emptyData()` resets that instance.
+
 Schema collections also support unsaved models and common query helpers:
 
 ```ts

@@ -50,7 +50,7 @@ change before the first stable version.
 | `insert`, `update`, and `remove`                | **Supported** | Single and bulk forms follow Mirage's common behavior. |
 | `createCollection`, `loadData`, and `emptyData` | **Supported** | Available on the database object.                      |
 | `dump`                                          | **Different** | Returns typed data rather than only logging it.        |
-| Custom `IdentityManager`                        | **Planned**   | Needed for UUIDs and backend-specific ID generation.   |
+| Custom `IdentityManager`                        | **Supported** | Application and per-model ID generators.               |
 
 ## Models and relationships
 

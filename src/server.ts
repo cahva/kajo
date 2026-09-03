@@ -1,5 +1,10 @@
 import { RequestBoundary } from "./boundary.ts";
-import { createDatabase, type Database, type DatabaseData } from "./database.ts";
+import {
+  createDatabase,
+  type Database,
+  type DatabaseData,
+  type IdentityManagerConstructor,
+} from "./database.ts";
 import {
   type Factory,
   type FactoryAfterCreate,
@@ -72,6 +77,12 @@ export type FactoryRegistry<Models extends ModelRegistry> = {
   readonly [Name in keyof Models]?: Factory<ModelAttributes<Models[Name]>, never, never>;
 };
 
+export type IdentityManagerRegistry<Fixtures extends DatabaseData, Models extends ModelRegistry> = {
+  readonly application?: IdentityManagerConstructor;
+} & {
+  readonly [Name in (keyof Fixtures | keyof Models) & string]?: IdentityManagerConstructor;
+};
+
 export interface ServerOptions<
   Fixtures extends DatabaseData = DatabaseData,
   Models extends ModelRegistry = {},
@@ -94,6 +105,8 @@ export interface ServerOptions<
   readonly fixtures?: Fixtures;
   /** Factory definitions, keyed by singular model name. */
   readonly factories?: FactoryRegistry<Models>;
+  /** Application, collection, and per-model identity manager constructors. */
+  readonly identityManagers?: IdentityManagerRegistry<Fixtures, Models>;
   /** Model definitions, keyed by singular model name. */
   readonly models?: Models;
   /** Initialize additional application data. */
@@ -178,7 +191,15 @@ export class Server<
     this.#factories = options.factories ?? {};
     this.#models = (options.models ?? {}) as Models;
     this.#trackRequests = options.trackRequests ?? false;
-    this.db = createDatabase(options.fixtures) as Database<ServerTables<Fixtures, Models>>;
+    const identityManagers = Object.fromEntries(
+      Object.entries(options.identityManagers ?? {}).map(([name, Manager]) => [
+        name in this.#models ? pluralize(name) : name,
+        Manager,
+      ]),
+    );
+    this.db = createDatabase(options.fixtures, {
+      identityManagers,
+    }) as Database<ServerTables<Fixtures, Models>>;
 
     for (const modelName of Object.keys(options.models ?? {})) {
       const collectionName = pluralize(modelName);
@@ -657,6 +678,7 @@ export function createServer<Fixtures extends DatabaseData = {}, Models extends 
   const server = new Server<Fixtures, Models>({
     factories: options.factories,
     fixtures: options.fixtures,
+    identityManagers: options.identityManagers,
     intercept: options.intercept,
     logging: options.logging,
     models: options.models,
