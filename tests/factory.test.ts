@@ -156,6 +156,77 @@ describe("factories", () => {
     expect(otherServer.create("user").name).toBe("User 0");
   });
 
+  test("builds typed models without persisting them or running creation hooks", () => {
+    const server = createUserServer();
+    const user = server.build("user", "admin", {
+      name: "Ada Lovelace",
+    });
+
+    expectTypeOf(user.id).toEqualTypeOf<null>();
+    expectTypeOf(user.name).toEqualTypeOf<string>();
+    expect(user.attrs).toEqual({
+      id: null,
+      name: "Ada Lovelace",
+      role: "admin",
+      slug: "ada-lovelace",
+    });
+    expect(user.isNew()).toBe(true);
+    expect(server.db.users.length).toBe(0);
+    expect(hooks).toEqual([]);
+
+    const saved = user.save();
+
+    expect(saved.id).toBe("1");
+    expect(server.db.users.length).toBe(1);
+    expect(hooks).toEqual([]);
+  });
+
+  test("builds unpersisted lists and advances the shared factory sequence", () => {
+    const server = createUserServer();
+    const users = server.buildList("user", 2);
+
+    expect(users.map(({ id }) => id)).toEqual([null, null]);
+    expect(users.map(({ name }) => name)).toEqual(["User 0", "User 1"]);
+    expect(server.db.users.length).toBe(0);
+    expect(server.create("user").name).toBe("User 2");
+    expect(() => server.buildList("user", -1)).toThrow(
+      "Factory list count must be a non-negative integer.",
+    );
+  });
+
+  test("persists declarative associations while leaving the built model unpersisted", () => {
+    const server = createServer({
+      factories: {
+        post: Factory.extend<{ title: string }>({
+          author: association(),
+          title: "Factory builders",
+        }),
+        user: userFactory,
+      },
+      intercept: false,
+      models: {
+        post: model<{ title: string }>().extend({
+          author: belongsTo("user"),
+        }),
+        user: model<User>().extend({
+          posts: hasMany("post"),
+        }),
+      },
+    });
+
+    const post = server.build("post");
+
+    expect(post.id).toBeNull();
+    expect(post.author?.id).toBe("1");
+    expect(server.db.posts.length).toBe(0);
+    expect(server.db.users.length).toBe(1);
+    expect(post.author?.posts.length).toBe(0);
+
+    const saved = post.save();
+
+    expect(saved.author?.posts.models.map(({ id }) => id)).toEqual([saved.id]);
+  });
+
   test("reports invalid traits and list sizes", () => {
     const server = createUserServer();
 

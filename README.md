@@ -402,6 +402,12 @@ createServer({
   seeds(server) {
     server.createList("user", 5);
     server.create("user", "admin", { name: "Ada" });
+
+    const draft = server.build("user", { name: "Linnea" });
+    draft.id; // null
+    draft.save(); // persist later
+
+    server.buildList("user", 3); // three typed, unpersisted models
   },
 });
 ```
@@ -409,6 +415,12 @@ createServer({
 Dependent attributes resolve lazily, so `slug` can read `name` even though it is
 declared first. Each function runs once per build. Dependency cycles report the
 attribute chain that caused them.
+
+`build()` and `buildList()` consume the same per-server sequence as `create()`
+and apply traits, overrides, dependencies, and declarative associations. The
+primary models remain unpersisted and creation hooks do not run. Declarative
+associations are persisted so a built model can safely reference and later save
+them.
 
 Use `association()` on a belongs-to relationship to create its related model.
 Trait names are forwarded to the associated factory, while an explicit

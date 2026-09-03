@@ -77,6 +77,7 @@ change before the first stable version.
 | Base and trait `afterCreate` hooks                | **Supported** | Hooks receive typed models and a server context.                                              |
 | `association()`                                   | **Supported** | Belongs-to targets are inferred from model definitions; traits and caller overrides work.     |
 | `create` and `createList`                         | **Supported** | Return model types inferred from the model registry.                                          |
+| `build` and `buildList`                           | **Different** | Kajo addition returning typed, unpersisted models that can be saved later.                    |
 | Automatic dependency ordering and cycle detection | **Supported** | Attributes evaluate once in dependency order; attribute and association cycles are diagnosed. |
 | Fixtures and seeds                                | **Supported** | Fixtures initialize collections and seeds can build additional state.                         |
 | Selective `loadFixtures()`                        | **Supported** | Loads all configured fixtures or a typed collection-name subset.                              |

@@ -29,6 +29,7 @@ import {
   type ModelFor,
   type ModelRegistry,
   type ModelTables,
+  type NewModelFor,
   pluralize,
   type Schema,
 } from "./model.ts";
@@ -257,6 +258,31 @@ export class Server<
   }
 
   /**
+   * Build one unpersisted model from its factory, traits, and overrides.
+   */
+  build<Name extends keyof Models & string>(
+    modelName: Name,
+    ...traitsAndOverrides: readonly (string | Partial<ModelCreateInput<Models, Name>>)[]
+  ): NewModelFor<Models, Name> {
+    if (this.#factoryStack.includes(modelName)) {
+      throw new Error(
+        `Factory association cycle detected: ${[...this.#factoryStack, modelName].join(" -> ")}.`,
+      );
+    }
+
+    this.#factoryStack.push(modelName);
+
+    try {
+      return this.#materializeModel(modelName, traitsAndOverrides, false) as NewModelFor<
+        Models,
+        Name
+      >;
+    } finally {
+      this.#factoryStack.pop();
+    }
+  }
+
+  /**
    * Create one model, optionally applying factory traits and attribute
    * overrides.
    */
@@ -273,16 +299,17 @@ export class Server<
     this.#factoryStack.push(modelName);
 
     try {
-      return this.#createModel(modelName, traitsAndOverrides);
+      return this.#materializeModel(modelName, traitsAndOverrides, true) as ModelFor<Models, Name>;
     } finally {
       this.#factoryStack.pop();
     }
   }
 
-  #createModel<Name extends keyof Models & string>(
+  #materializeModel<Name extends keyof Models & string>(
     modelName: Name,
     traitsAndOverrides: readonly (string | Partial<ModelCreateInput<Models, Name>>)[],
-  ): ModelFor<Models, Name> {
+    persist: boolean,
+  ): ModelFor<Models, Name> | NewModelFor<Models, Name> {
     const { overrides, traits } = factoryArguments(traitsAndOverrides);
     const factory = this.#factories[modelName];
     const sequence = this.#factorySequences.get(modelName) ?? 0;
@@ -298,29 +325,29 @@ export class Server<
     if (
       typeof collection !== "object" ||
       collection === null ||
-      typeof Reflect.get(collection, "create") !== "function"
+      typeof Reflect.get(collection, persist ? "create" : "new") !== "function"
     ) {
       throw new Error(`Model "${modelName}" does not have a schema collection.`);
     }
 
-    const created = Reflect.apply(Reflect.get(collection, "create"), collection, [
+    const model = Reflect.apply(Reflect.get(collection, persist ? "create" : "new"), collection, [
       attributes,
-    ]) as ModelFor<Models, Name>;
+    ]) as ModelFor<Models, Name> | NewModelFor<Models, Name>;
     this.#factorySequences.set(modelName, sequence + 1);
 
-    for (const afterCreate of build?.afterCreate ?? []) {
+    for (const afterCreate of persist ? (build?.afterCreate ?? []) : []) {
       (
         afterCreate as FactoryAfterCreate<
           FactoryModel<ModelAttributes<Models[Name]>>,
           FactoryServer
         >
       )(
-        created as unknown as FactoryModel<ModelAttributes<Models[Name]>>,
+        model as unknown as FactoryModel<ModelAttributes<Models[Name]>>,
         this as unknown as FactoryServer,
       );
     }
 
-    return created;
+    return model;
   }
 
   #resolveFactoryAssociations(
@@ -377,6 +404,22 @@ export class Server<
     }
 
     return Array.from({ length: count }, () => this.create(modelName, ...traitsAndOverrides));
+  }
+
+  /**
+   * Build several unpersisted models from the same factory, traits, and
+   * overrides.
+   */
+  buildList<Name extends keyof Models & string>(
+    modelName: Name,
+    count: number,
+    ...traitsAndOverrides: readonly (string | Partial<ModelCreateInput<Models, Name>>)[]
+  ): NewModelFor<Models, Name>[] {
+    if (!Number.isInteger(count) || count < 0) {
+      throw new RangeError("Factory list count must be a non-negative integer.");
+    }
+
+    return Array.from({ length: count }, () => this.build(modelName, ...traitsAndOverrides));
   }
 
   /**

@@ -47,6 +47,8 @@ and this project adheres to
 - Typed factories with sequences, order-independent dependent attributes,
   single evaluation, dependency-cycle diagnostics, traits, overrides, and list
   creation.
+- Typed `build()` and `buildList()` server helpers for producing unpersisted
+  factory models that can be saved later.
 - Typed `loadFixtures()` support for restoring all configured fixtures or a
   selected set of fixture collections.
 - Base and trait-specific factory `afterCreate` hooks.
