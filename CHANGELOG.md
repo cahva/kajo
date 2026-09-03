@@ -16,5 +16,6 @@ and this project adheres to
 - Dynamic route parameters, query parameters, request bodies, and namespaces.
 - Global and per-route response timing.
 - Runtime-independent request handling, passthrough, and server shutdown.
+- Automatic Fetch and XMLHttpRequest interception with network passthrough.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD

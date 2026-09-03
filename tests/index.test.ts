@@ -3,6 +3,7 @@ import { createServer } from "../src/index.ts";
 
 test("handles static JSON responses", async () => {
   const server = createServer({
+    intercept: false,
     routes() {
       this.get("/movies", {
         movies: ["Interstellar", "Inception", "Dunkirk"],
@@ -20,6 +21,7 @@ test("handles static JSON responses", async () => {
 
 test("passes request details to handlers", async () => {
   const server = createServer({
+    intercept: false,
     routes() {
       this.post("/movies/:id", (_schema, request) => ({
         body: request.requestBody,
@@ -45,6 +47,7 @@ test("passes request details to handlers", async () => {
 
 test("uses the namespace active when a route is registered", async () => {
   const server = createServer({
+    intercept: false,
     routes() {
       this.namespace = "api";
       this.get("/movies", []);
@@ -59,6 +62,7 @@ test("uses the namespace active when a route is registered", async () => {
 
 test("prefers static paths over dynamic paths", async () => {
   const server = createServer({
+    intercept: false,
     routes() {
       this.get("/movies/:id", (_schema, request) => ({
         id: request.params.id,
@@ -74,6 +78,7 @@ test("prefers static paths over dynamic paths", async () => {
 
 test("returns undefined for unmatched requests and after shutdown", async () => {
   const server = createServer({
+    intercept: false,
     routes() {
       this.get("/movies", []);
     },
@@ -84,4 +89,26 @@ test("returns undefined for unmatched requests and after shutdown", async () => 
   server.shutdown();
 
   await expect(server.handle(new Request("https://example.test/movies"))).resolves.toBeUndefined();
+});
+
+test("intercepts matching fetch requests and passes through unmatched requests", async () => {
+  const server = createServer({
+    routes() {
+      this.get("/movies/:id", (_schema, request) => ({
+        id: request.params.id,
+      }));
+    },
+  });
+
+  try {
+    const response = await fetch("https://example.test/movies/1");
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ id: "1" });
+
+    const passthroughResponse = await fetch("data:text/plain,not%20intercepted");
+    await expect(passthroughResponse.text()).resolves.toBe("not intercepted");
+  } finally {
+    server.shutdown();
+  }
 });

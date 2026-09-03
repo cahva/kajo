@@ -7,6 +7,7 @@
   "exclude": [
     ".git",
     ".gitignore",
+    ".pnpm-lock.yaml.*.tmp",
     ".vite-hooks",
     ".zed",
     "AGENTS.md",

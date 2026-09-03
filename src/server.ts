@@ -6,6 +6,7 @@ import type {
   RouteResponder,
   Schema,
 } from "./http.ts";
+import { interceptRequests, type NetworkInterceptor } from "./interceptor.ts";
 import { joinPaths, Router } from "./router.ts";
 
 const EMPTY_SCHEMA: Schema = Object.freeze({});
@@ -22,6 +23,8 @@ export interface ServerOptions {
   readonly routes?: (this: Server) => void;
   /** Default response delay in milliseconds. */
   readonly timing?: number;
+  /** Whether to intercept Fetch and XMLHttpRequest traffic. */
+  readonly intercept?: boolean;
 }
 
 /**
@@ -29,6 +32,7 @@ export interface ServerOptions {
  */
 export class Server {
   readonly #router = new Router();
+  #interceptor: NetworkInterceptor | undefined;
   #isRunning = true;
 
   /** A path prepended to routes registered after it is set. */
@@ -39,6 +43,10 @@ export class Server {
 
   constructor(options: Omit<ServerOptions, "routes"> = {}) {
     this.timing = options.timing ?? 0;
+
+    if (options.intercept !== false) {
+      this.#interceptor = interceptRequests((request) => this.handle(request));
+    }
   }
 
   /**
@@ -72,6 +80,8 @@ export class Server {
 
   /** Stop this server from handling requests. */
   shutdown(): void {
+    this.#interceptor?.dispose();
+    this.#interceptor = undefined;
     this.#isRunning = false;
   }
 
@@ -121,7 +131,10 @@ export class Server {
  * Create and configure an in-memory API server.
  */
 export function createServer(options: ServerOptions = {}): Server {
-  const server = new Server({ timing: options.timing });
+  const server = new Server({
+    intercept: options.intercept,
+    timing: options.timing,
+  });
   options.routes?.call(server);
   return server;
 }

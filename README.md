@@ -24,6 +24,34 @@ The initial roadmap is:
   issues
 - OpenAPI integration after the compatibility foundation is stable
 
+## Current API
+
+Kajo can register typed route handlers and intercept requests made with Fetch
+or XMLHttpRequest:
+
+```ts
+import { createServer } from "@cahva/kajo";
+
+const server = createServer({
+  routes() {
+    this.namespace = "api";
+
+    this.get("/movies/:id", (_schema, request) => ({
+      id: request.params.id,
+      title: "Arrival",
+    }));
+  },
+});
+
+const response = await fetch("/api/movies/1");
+await response.json(); // { id: "1", title: "Arrival" }
+
+server.shutdown();
+```
+
+The data-layer argument is reserved for the typed schema and model APIs that
+are still under development.
+
 ## Principles
 
 - **TypeScript first.** Runtime definitions should be the source of static
