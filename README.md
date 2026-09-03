@@ -3,26 +3,31 @@
 > Your backend on the horizon.
 
 Kajo is a fully typed, in-memory API simulator for building and testing
-applications without a backend. It aims to provide the capabilities and
-developer experience of [Mirage JS](https://miragejs.com/) with a modern
-TypeScript-first design.
+applications without a backend. Define routes, models, factories, and
+serializers in TypeScript, or register routes straight from an OpenAPI 3.1
+document, and Kajo intercepts Fetch and XMLHttpRequest traffic in browsers and
+modern runtimes.
 
 Kajo is Finnish for a faint glow or reflected light, often seen on the horizon:
 something visible, but not quite tangible.
 
 ## Status
 
-Kajo is in early development and does not have a stable public API yet.
+Kajo is a development and testing tool; it is not meant to serve production
+traffic. It is in early development, so the API will keep evolving through 0.x
+releases, with changes documented in the [changelog](./CHANGELOG.md).
 
-The initial roadmap is:
+The core is implemented and tested: HTTP route handling with request
+interception, passthrough, and timing, an in-memory database with typed models
+and relationships, factories, fixtures, traits, seeds, serializers, and route
+shorthand helpers. If you are coming from
+[Mirage JS](https://miragejs.com/), Kajo will feel familiar; a living
+[compatibility matrix](./COMPATIBILITY.md) tracks the differences.
 
-- HTTP route handling, request interception, passthrough, and timing
-- An in-memory database with typed models and relationships
-- Factories, fixtures, traits, and seeds
-- Serializers and route shorthand helpers
-- A [compatibility suite](./COMPATIBILITY.md) covering Mirage JS behavior and
-  relevant reported issues
-- OpenAPI integration after the compatibility foundation is stable
+On top of that core, Kajo can register routes directly from an OpenAPI 3.1
+document, so a project with a spec does not have to define the same endpoints
+twice. Expanding that adapter with external `$ref` resolution and request
+validation, and publishing the first release, are the next steps.
 
 ## Current API
 
@@ -521,16 +526,15 @@ const postByAda = server.create("post", { author: ada });
 
 - **TypeScript first.** Runtime definitions should be the source of static
   types rather than requiring duplicate declarations.
-- **Compatibility focused.** Familiar Mirage JS concepts and behavior should
-  make migration straightforward.
+- **Familiar.** Mirage JS concepts carry over, so migrating a project stays
+  straightforward.
 - **Portable.** Kajo should work across modern browsers and JavaScript
   runtimes.
 - **Well tested.** Public behavior is specified by tests, including
   compatibility and regression coverage.
 
 See the living [Mirage JS compatibility matrix](./COMPATIBILITY.md) for
-supported behavior, intentional differences, and the prioritized parity
-backlog.
+supported behavior, intentional differences, and the remaining work.
 
 ## Examples
 

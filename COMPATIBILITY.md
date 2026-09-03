@@ -17,8 +17,8 @@ differences visible.
 | **Not planned** | The API exposes a Mirage implementation detail Kajo will not reproduce. |
 
 Compatibility refers to behavior rather than identical syntax unless the API
-name is explicitly shown. Kajo is still pre-release, so even supported APIs may
-change before the first stable version.
+name is explicitly shown. Kajo is a development tool in its 0.x phase, so even
+supported APIs may still change; the changelog documents every change.
 
 ## Server and HTTP
 
@@ -109,9 +109,12 @@ change before the first stable version.
 | `normalizedRequestAttrs()` for custom handlers | **Supported** | Takes an explicit request and model name to preserve typing and async safety. |
 | Coalesced GET requests                         | **Supported** | Accepts `ids=1,3` and repeated `ids=1&ids=3` OpenAPI form-array encodings.    |
 
-## Known Mirage issues already addressed
+## Known Mirage issues checked against Kajo
 
-These are behavioral inputs, not commitments to preserve Mirage internals.
+Kajo uses a different implementation than Mirage (MSW interceptors rather than
+Pretender, for example), so these issues do not apply directly. They were used
+as regression inputs to check that Kajo does not run into the same problems,
+not as a list of fixes to port.
 
 | Mirage issue                                                                                                  | Kajo behavior                                                                                                        |
 | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -124,11 +127,14 @@ These are behavioral inputs, not commitments to preserve Mirage internals.
 | [Ember #1915: binary Fetch responses are corrupted](https://github.com/miragejs/ember-cli-mirage/issues/1915) | Native byte streams are preserved for passthrough request and response bodies.                                       |
 | Unrelated traffic intercepted globally                                                                        | Ownership is derived from registered route origins and namespaces; unrelated origins and paths bypass automatically. |
 
-## Prioritized compatibility work
+## Remaining work
 
-1. Expand the issue-driven regression suite before declaring a stable API.
-2. Expand the initial OpenAPI 3.1 route adapter with external `$ref` resolution
-   and request validation.
+The Mirage-style core is implemented and tested. The remaining work is the
+OpenAPI convenience layer and the first release:
+
+1. Expand the OpenAPI 3.1 route adapter with external `$ref` resolution and
+   request validation.
+2. Publish the first release.
 
 OpenAPI documents can register deterministic example-backed routes, generate
 response bodies from JSON Schemas, and resolve local JSON Pointers; explicit
