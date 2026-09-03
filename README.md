@@ -341,6 +341,55 @@ Missing shorthand records return `404`, malformed shorthand payloads return
 `400`, and custom handlers can throw `new HttpError(status, message)` for
 expected JSON error responses.
 
+### OpenAPI
+
+Kajo can register example-backed routes directly from an OpenAPI 3.1 document.
+Path templates are converted to Kajo parameters, JSON media types are preferred,
+and the first named example is selected deterministically:
+
+```ts
+const server = createServer({
+  openapi: {
+    openapi: "3.1.0",
+    info: { title: "Tasks", version: "1.0.0" },
+    paths: {
+      "/tasks/{taskId}": {
+        get: {
+          responses: {
+            "200": {
+              description: "A task",
+              content: {
+                "application/json": {
+                  example: { id: "1", title: "On the horizon" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  routes() {
+    // Explicit routes are registered later and override generated operations.
+    this.get("/tasks/:taskId", (_schema, request) => loadTask(request.params.taskId));
+  },
+});
+```
+
+Operations without examples generate a deterministic body from the response
+JSON Schema. Each schema node uses `example`, `examples`, `const`, `default`,
+or `enum` when present, merges `allOf`, picks the first `oneOf` or `anyOf`
+branch, and otherwise synthesizes a placeholder from `type`: `"string"` or a
+fixed constant for known string formats, the `minimum` or `0` for numbers,
+`true` for booleans, one generated `items` element for arrays, and every
+declared property for objects. Unconstrained schemas produce `{}`, and
+recursive schemas require an explicit example.
+
+The first increment supports inline examples, locally referenced examples, and
+schema-generated values with concrete, `2XX`, or `default` success responses.
+Local JSON Pointer references can target path items, responses, examples, and
+schemas. External `$ref` resolution and request validation are planned next.
+
 Kajo owns same-origin routes by default in browsers. Set `urlPrefix` for an
 external API; requests outside that origin and namespace are ignored
 automatically. Unhandled requests inside the boundary fail loudly unless they

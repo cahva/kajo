@@ -75,6 +75,13 @@ and this project adheres to
   trailing-slash handling, and deterministic route specificity.
 - A separate headless Chromium suite covering real Fetch and XMLHttpRequest
   interception.
+- Initial OpenAPI 3.1 integration for example-backed operations, path-template
+  conversion, deterministic response selection, and explicit route overrides.
+- Local OpenAPI JSON Pointer resolution for path items, responses, examples,
+  and schemas, with diagnostics for missing and circular references.
+- Deterministic JSON Schema response generation for OpenAPI operations without
+  examples, covering `const`, `default`, `enum`, composition keywords, string
+  formats, and typed placeholder synthesis.
 
 ### Changed
 
