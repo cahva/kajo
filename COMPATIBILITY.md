@@ -105,7 +105,7 @@ change before the first stable version.
 | DELETE shorthand                               | **Supported** | Returns an empty successful response.                                         |
 | `resource()` CRUD registration                 | **Supported** | Kajo addition with `only`, `except`, and custom paths.                        |
 | `normalizedRequestAttrs()` for custom handlers | **Supported** | Takes an explicit request and model name to preserve typing and async safety. |
-| Coalesced GET requests                         | **Planned**   | Depends on serializer and query compatibility decisions.                      |
+| Coalesced GET requests                         | **Supported** | Accepts `ids=1,3` and repeated `ids=1&ids=3` OpenAPI form-array encodings.    |
 
 ## Known Mirage issues already addressed
 
@@ -121,8 +121,7 @@ These are behavioral inputs, not commitments to preserve Mirage internals.
 
 ## Prioritized compatibility work
 
-1. Decide and document coalesced request behavior.
-2. Add polymorphic `hasMany` if issue research demonstrates a current use case.
-3. Expand the issue-driven regression suite before declaring a stable API.
+1. Add polymorphic `hasMany` if issue research demonstrates a current use case.
+2. Expand the issue-driven regression suite before declaring a stable API.
 
 OpenAPI integration starts after this compatibility foundation is stable.

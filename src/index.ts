@@ -79,6 +79,7 @@ export type {
 export { createServer, Server } from "./server.ts";
 export type {
   FactoryRegistry,
+  GetRouteOptions,
   IdentityManagerRegistry,
   PassthroughOptions,
   ResourceAction,

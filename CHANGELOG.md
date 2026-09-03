@@ -40,6 +40,8 @@ and this project adheres to
   collections and normalized JSON request bodies.
 - Typed `normalizedRequestAttrs()` support for sharing rooted and unrooted JSON
   normalization with custom route handlers.
+- Coalesced GET shorthands supporting comma-separated and repeated OpenAPI
+  `ids` array parameters.
 - Runnable vanilla TypeScript task-board example covering browser interception,
   relationships, serializers, a CRUD resource, and custom handlers.
 - Typed factories with sequences, order-independent dependent attributes,

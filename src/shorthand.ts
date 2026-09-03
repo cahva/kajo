@@ -10,6 +10,11 @@ import { pluralize, type ModelRegistry, type Schema } from "./model.ts";
 
 export type ShorthandMethod = "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
 
+export interface ShorthandOptions {
+  /** Resolve an `ids` query parameter as a multi-record GET. */
+  readonly coalesce?: boolean;
+}
+
 interface RuntimeModel extends JsonSerializable {
   destroy(): void;
   update(attributes: object): RuntimeModel;
@@ -20,6 +25,7 @@ interface RuntimeCollection {
   all(): RouteResult;
   create(attributes: object): RouteResult;
   find(id: string): RuntimeModel | null;
+  find(ids: readonly string[]): RouteResult;
 }
 
 /**
@@ -30,6 +36,7 @@ export function createShorthandHandler<Tables extends DatabaseData, Models exten
   method: ShorthandMethod,
   path: string,
   resourceName?: string,
+  options: ShorthandOptions = {},
 ): RouteHandler<Tables, Models> {
   const inferredName = resourceName ?? inferResourceName(path);
 
@@ -38,7 +45,12 @@ export function createShorthandHandler<Tables extends DatabaseData, Models exten
 
     switch (method) {
       case "GET":
-        return request.params.id ? findModel(collection, request.params.id) : collection.all();
+        if (request.params.id) {
+          return findModel(collection, request.params.id);
+        }
+
+        const ids = options.coalesce ? coalescedIds(request) : undefined;
+        return ids ? collection.find(ids) : collection.all();
       case "POST":
         return collection.create(normalizedRequestAttrs(request, collection.modelName));
       case "PATCH":
@@ -51,6 +63,16 @@ export function createShorthandHandler<Tables extends DatabaseData, Models exten
         return undefined;
     }
   };
+}
+
+function coalescedIds(request: KajoRequest): string[] | undefined {
+  const values = new URL(request.url).searchParams.getAll("ids");
+
+  if (values.length === 0) {
+    return undefined;
+  }
+
+  return values.flatMap((value) => value.split(",")).filter(Boolean);
 }
 
 function inferResourceName(path: string): string {

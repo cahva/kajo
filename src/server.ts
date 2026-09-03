@@ -46,6 +46,7 @@ import { serialize, type SerializerRegistry } from "./serializer.ts";
 import {
   createShorthandHandler,
   normalizedRequestAttrs,
+  type ShorthandOptions,
   type ShorthandMethod,
 } from "./shorthand.ts";
 
@@ -70,6 +71,8 @@ export interface ResourceOptions {
   /** Override the URL path while retaining the schema collection name. */
   readonly path?: string;
 }
+
+export interface GetRouteOptions extends RouteOptions, ShorthandOptions {}
 
 /**
  * Configuration used to create a Kajo server.
@@ -565,9 +568,14 @@ export class Server<
 
   get(
     path: string,
-    responder?: RouteResponder<ServerTables<Fixtures, Models>, Models>,
-    options: RouteOptions = {},
+    responder?: GetRouteOptions | RouteResponder<ServerTables<Fixtures, Models>, Models>,
+    options: GetRouteOptions = {},
   ): void {
+    if (isGetRouteOptions(responder)) {
+      this.#register("GET", path, undefined, responder);
+      return;
+    }
+
     this.#register("GET", path, responder, options);
   }
 
@@ -661,7 +669,7 @@ export class Server<
     method: HttpMethod,
     path: string,
     responder: RouteResponder<ServerTables<Fixtures, Models>, Models> | undefined,
-    options: RouteOptions,
+    options: GetRouteOptions,
   ): void {
     const address = this.#boundary.resolve(this.urlPrefix, this.namespace, path);
     this.#boundary.own(address);
@@ -675,11 +683,12 @@ export class Server<
         method,
         path,
         responder,
+        { coalesce: options.coalesce },
       );
-      const routeOptions =
-        options.status === undefined
-          ? { ...options, status: method === "POST" ? 201 : 200 }
-          : options;
+      const routeOptions: RouteOptions = {
+        status: options.status ?? (method === "POST" ? 201 : 200),
+        timing: options.timing,
+      };
 
       this.#router.add(method, address.path, routeResponder, routeOptions, address.origin);
       return;
@@ -712,6 +721,15 @@ function isShorthandMethod(method: HttpMethod): method is ShorthandMethod {
     method === "PATCH" ||
     method === "POST" ||
     method === "PUT"
+  );
+}
+
+function isGetRouteOptions(value: unknown): value is GetRouteOptions {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !(value instanceof Response) &&
+    Object.prototype.hasOwnProperty.call(value, "coalesce")
   );
 }
 

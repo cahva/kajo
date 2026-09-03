@@ -46,6 +46,48 @@ describe("route shorthands", () => {
     });
   });
 
+  test("coalesces comma-separated and repeated OpenAPI array parameters", async () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        movie: model<{ title: string }>(),
+      },
+      routes() {
+        this.get("/movies", { coalesce: true });
+        this.get("/films", "movies", { coalesce: true });
+      },
+      seeds(server) {
+        server.schema.movies.create({ title: "Arrival" });
+        server.schema.movies.create({ title: "Contact" });
+        server.schema.movies.create({ title: "Interstellar" });
+      },
+    });
+
+    const commaSeparated = await server.handle(new Request("https://example.test/movies?ids=3,1"));
+    const repeated = await server.handle(new Request("https://example.test/films?ids=2&ids=1"));
+    const index = await server.handle(new Request("https://example.test/movies"));
+
+    await expect(commaSeparated?.json()).resolves.toEqual({
+      movies: [
+        { id: "3", title: "Interstellar" },
+        { id: "1", title: "Arrival" },
+      ],
+    });
+    await expect(repeated?.json()).resolves.toEqual({
+      movies: [
+        { id: "2", title: "Contact" },
+        { id: "1", title: "Arrival" },
+      ],
+    });
+    await expect(index?.json()).resolves.toEqual({
+      movies: [
+        { id: "1", title: "Arrival" },
+        { id: "2", title: "Contact" },
+        { id: "3", title: "Interstellar" },
+      ],
+    });
+  });
+
   test("creates models from rooted request JSON", async () => {
     const server = createMovieServer();
     const response = await server.handle(

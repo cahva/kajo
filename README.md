@@ -261,6 +261,7 @@ collection name when the URL and schema do not match:
 this.get("/posts");
 this.get("/posts/:id");
 this.get("/articles", "posts");
+this.get("/selected-posts", "posts", { coalesce: true });
 this.post("/posts");
 this.patch("/posts/:id");
 this.del("/posts/:id");
@@ -270,6 +271,17 @@ this.del("/posts/:id");
 `{ ... }` JSON objects. The model name is checked against the configured model
 registry and determines both the inferred attribute type and optional root.
 Malformed or non-object JSON produces a structured `400` response.
+
+Set `{ coalesce: true }` on a GET shorthand to retrieve selected records using
+either common OpenAPI form-array encoding:
+
+```text
+GET /selected-posts?ids=1,3
+GET /selected-posts?ids=1&ids=3
+```
+
+The response preserves requested ID order. A coalesced route without an `ids`
+parameter behaves like its normal collection index.
 
 Use `resource()` to register a complete CRUD resource:
 
