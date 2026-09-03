@@ -35,6 +35,9 @@ and this project adheres to
 - `resource()` route helper with action filters and custom paths.
 - Structured JSON responses for expected `HttpError` failures, including
   shorthand `400` and `404` responses.
+- Origin-aware request ownership with browser same-origin defaults, registration
+  time `urlPrefix` support, strict unhandled-request diagnostics, and explicit
+  method-aware `passthrough()` rules.
 
 ### Fixed
 

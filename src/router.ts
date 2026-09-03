@@ -12,6 +12,7 @@ export interface Route<
   Models extends ModelRegistry = {},
 > {
   readonly method: string;
+  readonly origin?: string;
   readonly path: string;
   readonly responder: RouteResponder<Tables, Models>;
   readonly segments: readonly RouteSegment[];
@@ -34,11 +35,13 @@ export class Router<Tables extends DatabaseData = DatabaseData, Models extends M
     path: string,
     responder: RouteResponder<Tables, Models>,
     options: RouteOptions,
+    origin?: string,
   ): void {
     const normalizedPath = normalizePath(path);
 
     this.#routes.push({
       method: method.toUpperCase(),
+      origin,
       path: normalizedPath,
       responder,
       segments: parseSegments(normalizedPath),
@@ -46,8 +49,8 @@ export class Router<Tables extends DatabaseData = DatabaseData, Models extends M
     });
   }
 
-  match(method: string, path: string): RouteMatch<Tables, Models> | undefined {
-    const requestSegments = splitPath(normalizePath(path));
+  match(method: string, url: URL): RouteMatch<Tables, Models> | undefined {
+    const requestSegments = splitPath(normalizePath(url.pathname));
     let bestMatch:
       | (RouteMatch<Tables, Models> & {
           readonly staticSegmentCount: number;
@@ -57,6 +60,7 @@ export class Router<Tables extends DatabaseData = DatabaseData, Models extends M
     for (const route of this.#routes) {
       if (
         route.method !== method.toUpperCase() ||
+        (route.origin !== undefined && route.origin !== url.origin) ||
         route.segments.length !== requestSegments.length
       ) {
         continue;

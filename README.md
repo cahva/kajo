@@ -157,6 +157,22 @@ Missing shorthand records return `404`, malformed shorthand payloads return
 `400`, and custom handlers can throw `new HttpError(status, message)` for
 expected JSON error responses.
 
+Kajo owns same-origin routes by default in browsers. Set `urlPrefix` for an
+external API; requests outside that origin and namespace are ignored
+automatically. Unhandled requests inside the boundary fail loudly unless they
+match `passthrough()` or `unhandledRequest` is set to `"bypass"`:
+
+```ts
+createServer({
+  urlPrefix: "https://api.example.test",
+  routes() {
+    this.namespace = "/v1";
+    this.resource("posts");
+    this.passthrough("/health", { methods: ["GET"] });
+  },
+});
+```
+
 Factories generate realistic model data with sequences, dependent attributes,
 traits, and final overrides:
 

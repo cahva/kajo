@@ -15,10 +15,14 @@ export function interceptRequests(
   });
 
   interceptor.on("request", async ({ request, controller }) => {
-    const response = await handle(request);
+    try {
+      const response = await handle(request);
 
-    if (response) {
-      controller.respondWith(response);
+      if (response) {
+        controller.respondWith(response);
+      }
+    } catch (error) {
+      controller.errorWith(error);
     }
   });
 

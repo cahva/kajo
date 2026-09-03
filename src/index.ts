@@ -56,7 +56,14 @@ export type {
   Schema,
 } from "./model.ts";
 export { createServer, Server } from "./server.ts";
-export type { FactoryRegistry, ResourceAction, ResourceOptions, ServerOptions } from "./server.ts";
+export type {
+  FactoryRegistry,
+  PassthroughOptions,
+  ResourceAction,
+  ResourceOptions,
+  ServerOptions,
+  UnhandledRequestPolicy,
+} from "./server.ts";
 export { serialize, Serializer } from "./serializer.ts";
 export type {
   IncludeOption,

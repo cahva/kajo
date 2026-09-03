@@ -1,3 +1,4 @@
+import { RequestBoundary } from "./boundary.ts";
 import { createDatabase, type Database, type DatabaseData } from "./database.ts";
 import type { Factory, FactoryAfterCreate, FactoryModel, FactoryServer } from "./factory.ts";
 import {
@@ -20,13 +21,20 @@ import {
   pluralize,
   type Schema,
 } from "./model.ts";
-import { joinPaths, Router } from "./router.ts";
+import { Router } from "./router.ts";
 import { serialize, type SerializerRegistry } from "./serializer.ts";
 import { createShorthandHandler, type ShorthandMethod } from "./shorthand.ts";
 
 const HTTP_METHODS = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"] as const;
 
 type HttpMethod = (typeof HTTP_METHODS)[number];
+
+export type UnhandledRequestPolicy = "bypass" | "error";
+
+export interface PassthroughOptions {
+  /** Restrict this rule to these HTTP methods. */
+  readonly methods?: readonly string[];
+}
 
 export type ResourceAction = "create" | "delete" | "index" | "show" | "update";
 
@@ -59,6 +67,10 @@ export interface ServerOptions<
   readonly timing?: number;
   /** Whether to intercept Fetch and XMLHttpRequest traffic. */
   readonly intercept?: boolean;
+  /** Behavior for unmatched requests inside Kajo's owned URL boundary. */
+  readonly unhandledRequest?: UnhandledRequestPolicy;
+  /** Default origin or absolute base URL used by routes. */
+  readonly urlPrefix?: string;
   /** Initial records, grouped by collection name. */
   readonly fixtures?: Fixtures;
   /** Factory definitions, keyed by singular model name. */
@@ -79,14 +91,19 @@ export class Server<
   Models extends ModelRegistry = {},
 > {
   readonly #router = new Router<ServerTables<Fixtures, Models>, Models>();
+  readonly #boundary = new RequestBoundary();
   readonly #serializers: SerializerRegistry;
   readonly #factories: FactoryRegistry<Models>;
   readonly #factorySequences = new Map<string, number>();
+  readonly #unhandledRequest: UnhandledRequestPolicy;
   #interceptor: NetworkInterceptor | undefined;
   #isRunning = true;
 
   /** A path prepended to routes registered after it is set. */
   namespace = "";
+
+  /** An origin or absolute base URL prepended to routes registered after it is set. */
+  urlPrefix: string;
 
   /** Default response delay in milliseconds. */
   timing: number;
@@ -99,6 +116,8 @@ export class Server<
 
   constructor(options: Omit<ServerOptions<Fixtures, Models>, "routes" | "seeds"> = {}) {
     this.timing = options.timing ?? 0;
+    this.urlPrefix = options.urlPrefix ?? "";
+    this.#unhandledRequest = options.unhandledRequest ?? "error";
     this.#serializers = options.serializers ?? {};
     this.#factories = options.factories ?? {};
     this.db = createDatabase(options.fixtures) as Database<ServerTables<Fixtures, Models>>;
@@ -111,7 +130,7 @@ export class Server<
     this.schema = createSchema(this.db, options.models);
 
     if (options.intercept !== false) {
-      this.#interceptor = interceptRequests((request) => this.handle(request));
+      this.#interceptor = interceptRequests((request) => this.#handleIntercepted(request));
     }
   }
 
@@ -190,7 +209,43 @@ export class Server<
     }
 
     const url = new URL(request.url);
-    const match = this.#router.match(request.method, url.pathname);
+
+    if (!this.#boundary.owns(url)) {
+      return undefined;
+    }
+
+    return this.#dispatch(request, url);
+  }
+
+  async #handleIntercepted(request: Request): Promise<Response | undefined> {
+    if (!this.#isRunning) {
+      return undefined;
+    }
+
+    const url = new URL(request.url);
+
+    if (!this.#boundary.owns(url)) {
+      return undefined;
+    }
+
+    const response = await this.#dispatch(request, url);
+
+    if (
+      response ||
+      this.#boundary.shouldPassthrough(request.method, url) ||
+      this.#unhandledRequest === "bypass"
+    ) {
+      return response;
+    }
+
+    throw new Error(
+      `Kajo intercepted an unhandled ${request.method.toUpperCase()} request to ${request.url}. ` +
+        "Register a route or add an explicit passthrough rule.",
+    );
+  }
+
+  async #dispatch(request: Request, url: URL): Promise<Response | undefined> {
+    const match = this.#router.match(request.method, url);
 
     if (!match) {
       return undefined;
@@ -326,12 +381,24 @@ export class Server<
     }
   }
 
+  /**
+   * Let an owned request continue to the real network. With no path, all
+   * requests in the current URL prefix and namespace are passed through.
+   */
+  passthrough(path = "**", options: PassthroughOptions = {}): void {
+    const address = this.#boundary.resolve(this.urlPrefix, this.namespace, path);
+    this.#boundary.addPassthrough(address, options.methods);
+  }
+
   #register(
     method: HttpMethod,
     path: string,
     responder: RouteResponder<ServerTables<Fixtures, Models>, Models> | undefined,
     options: RouteOptions,
   ): void {
+    const address = this.#boundary.resolve(this.urlPrefix, this.namespace, path);
+    this.#boundary.own(address);
+
     if (responder === undefined || typeof responder === "string") {
       if (!isShorthandMethod(method)) {
         throw new TypeError(`${method} routes require a responder.`);
@@ -347,11 +414,11 @@ export class Server<
           ? { ...options, status: method === "POST" ? 201 : 200 }
           : options;
 
-      this.#router.add(method, joinPaths(this.namespace, path), routeResponder, routeOptions);
+      this.#router.add(method, address.path, routeResponder, routeOptions, address.origin);
       return;
     }
 
-    this.#router.add(method, joinPaths(this.namespace, path), responder, options);
+    this.#router.add(method, address.path, responder, options, address.origin);
   }
 }
 
@@ -394,6 +461,8 @@ export function createServer<Fixtures extends DatabaseData = {}, Models extends 
     models: options.models,
     serializers: options.serializers,
     timing: options.timing,
+    unhandledRequest: options.unhandledRequest,
+    urlPrefix: options.urlPrefix,
   });
   options.routes?.call(server);
   options.seeds?.(server);
