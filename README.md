@@ -100,6 +100,22 @@ createServer({
 });
 ```
 
+Conventional CRUD routes can omit their handlers. Kajo infers the schema
+collection from the route and normalizes rooted JSON request bodies:
+
+```ts
+createServer({
+  models,
+  routes() {
+    this.get("/posts");
+    this.get("/posts/:id");
+    this.post("/posts");
+    this.patch("/posts/:id");
+    this.del("/posts/:id");
+  },
+});
+```
+
 ## Principles
 
 - **TypeScript first.** Runtime definitions should be the source of static

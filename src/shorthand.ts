@@ -1,0 +1,134 @@
+import type { DatabaseData } from "./database.ts";
+import type { JsonSerializable, KajoRequest, RouteHandler, RouteResult } from "./http.ts";
+import { pluralize, type ModelRegistry, type Schema } from "./model.ts";
+
+export type ShorthandMethod = "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
+
+interface RuntimeModel extends JsonSerializable {
+  destroy(): void;
+  update(attributes: object): RuntimeModel;
+}
+
+interface RuntimeCollection {
+  readonly modelName: string;
+  all(): RouteResult;
+  create(attributes: object): RouteResult;
+  find(id: string): RuntimeModel | null;
+}
+
+/**
+ * Build a conventional CRUD handler from a route path and optional resource
+ * name. Kept separate from Server so shorthand behavior has one implementation.
+ */
+export function createShorthandHandler<Tables extends DatabaseData, Models extends ModelRegistry>(
+  method: ShorthandMethod,
+  path: string,
+  resourceName?: string,
+): RouteHandler<Tables, Models> {
+  const inferredName = resourceName ?? inferResourceName(path);
+
+  return (schema, request) => {
+    const collection = resolveCollection(schema, inferredName);
+
+    switch (method) {
+      case "GET":
+        return request.params.id ? collection.find(request.params.id) : collection.all();
+      case "POST":
+        return collection.create(requestAttributes(request, collection.modelName));
+      case "PATCH":
+      case "PUT":
+        return collection
+          .find(requireId(request, method))
+          ?.update(requestAttributes(request, collection.modelName));
+      case "DELETE":
+        collection.find(requireId(request, method))?.destroy();
+        return undefined;
+    }
+  };
+}
+
+function inferResourceName(path: string): string {
+  const segment = path
+    .split("/")
+    .filter((part) => part && !part.startsWith(":"))
+    .at(-1);
+
+  if (!segment) {
+    throw new Error(`Cannot infer a shorthand resource from route "${path}".`);
+  }
+
+  return segment;
+}
+
+function resolveCollection<Tables extends DatabaseData, Models extends ModelRegistry>(
+  schema: Schema<Tables, Models>,
+  resourceName: string,
+): RuntimeCollection {
+  const candidates = [...new Set([resourceName, pluralize(resourceName)])];
+
+  for (const collectionName of candidates) {
+    const collection = Reflect.get(schema, collectionName);
+
+    if (isRuntimeCollection(collection)) {
+      return collection;
+    }
+  }
+
+  throw new Error(
+    `Shorthand resource "${resourceName}" does not match a schema collection. ` +
+      `Tried ${candidates.map((name) => `"${name}"`).join(" and ")}.`,
+  );
+}
+
+function isRuntimeCollection(value: unknown): value is RuntimeCollection {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof Reflect.get(value, "modelName") === "string" &&
+    typeof Reflect.get(value, "all") === "function" &&
+    typeof Reflect.get(value, "create") === "function" &&
+    typeof Reflect.get(value, "find") === "function"
+  );
+}
+
+function requestAttributes(request: KajoRequest, modelName: string): object {
+  if (!request.requestBody) {
+    return {};
+  }
+
+  let payload: unknown;
+
+  try {
+    payload = JSON.parse(request.requestBody);
+  } catch {
+    throw new SyntaxError(`The ${request.method} shorthand expected a JSON request body.`);
+  }
+
+  if (!isRecord(payload)) {
+    throw new TypeError(`The ${request.method} shorthand expected a JSON object.`);
+  }
+
+  const rootedAttributes = payload[modelName];
+
+  if (rootedAttributes !== undefined) {
+    if (!isRecord(rootedAttributes)) {
+      throw new TypeError(`The "${modelName}" request root must contain a JSON object.`);
+    }
+
+    return rootedAttributes;
+  }
+
+  return payload;
+}
+
+function requireId(request: KajoRequest, method: ShorthandMethod): string {
+  if (!request.params.id) {
+    throw new Error(`The ${method} shorthand requires an ":id" route parameter.`);
+  }
+
+  return request.params.id;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}

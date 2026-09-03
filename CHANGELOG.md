@@ -25,5 +25,7 @@ and this project adheres to
   explicit inverses, and foreign-key synchronization.
 - Application and per-model serializers with roots, attribute filtering, key
   transforms, relationship IDs, sideloading, and embedding.
+- Conventional CRUD route shorthands with inferred or explicit schema
+  collections and normalized JSON request bodies.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD

@@ -3,6 +3,7 @@ import {
   Collection,
   MODEL_METADATA,
   pluralize,
+  singularize,
   type RelationshipDefinition,
   type RelationshipRegistry,
 } from "./model.ts";
@@ -305,18 +306,6 @@ function isSerializableModel(value: unknown): value is SerializableModel {
 
 function serializerFor(modelName: string, serializers: SerializerRegistry): Serializer {
   return serializers[modelName] ?? serializers.application ?? DEFAULT_SERIALIZER;
-}
-
-function singularize(name: string): string {
-  if (name.endsWith("ies")) {
-    return `${name.slice(0, -3)}y`;
-  }
-
-  if (/(?:ses|xes|zes|ches|shes)$/i.test(name)) {
-    return name.slice(0, -2);
-  }
-
-  return name.endsWith("s") ? name.slice(0, -1) : name;
 }
 
 const DEFAULT_SERIALIZER = new Serializer();

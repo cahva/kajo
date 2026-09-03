@@ -392,7 +392,7 @@ export function pluralize(name: string): string {
   return `${name}s`;
 }
 
-function singularize(name: string): string {
+export function singularize(name: string): string {
   if (name.endsWith("ies")) {
     return `${name.slice(0, -3)}y`;
   }

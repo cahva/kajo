@@ -17,6 +17,7 @@ import {
 } from "./model.ts";
 import { joinPaths, Router } from "./router.ts";
 import { serialize, type SerializerRegistry } from "./serializer.ts";
+import { createShorthandHandler, type ShorthandMethod } from "./shorthand.ts";
 
 const HTTP_METHODS = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"] as const;
 
@@ -115,7 +116,7 @@ export class Server<
       await delay(timing);
     }
 
-    return toResponse(result, routeRequest, this.#serializers);
+    return toResponse(result, routeRequest, this.#serializers, match.route.options.status);
   }
 
   /** Stop this server from handling requests. */
@@ -127,7 +128,7 @@ export class Server<
 
   delete(
     path: string,
-    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
+    responder?: RouteResponder<ServerTables<Fixtures, Models>, Models>,
     options: RouteOptions = {},
   ): void {
     this.#register("DELETE", path, responder, options);
@@ -135,7 +136,7 @@ export class Server<
 
   del(
     path: string,
-    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
+    responder?: RouteResponder<ServerTables<Fixtures, Models>, Models>,
     options: RouteOptions = {},
   ): void {
     this.delete(path, responder, options);
@@ -143,7 +144,7 @@ export class Server<
 
   get(
     path: string,
-    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
+    responder?: RouteResponder<ServerTables<Fixtures, Models>, Models>,
     options: RouteOptions = {},
   ): void {
     this.#register("GET", path, responder, options);
@@ -167,7 +168,7 @@ export class Server<
 
   patch(
     path: string,
-    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
+    responder?: RouteResponder<ServerTables<Fixtures, Models>, Models>,
     options: RouteOptions = {},
   ): void {
     this.#register("PATCH", path, responder, options);
@@ -175,7 +176,7 @@ export class Server<
 
   post(
     path: string,
-    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
+    responder?: RouteResponder<ServerTables<Fixtures, Models>, Models>,
     options: RouteOptions = {},
   ): void {
     this.#register("POST", path, responder, options);
@@ -183,7 +184,7 @@ export class Server<
 
   put(
     path: string,
-    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
+    responder?: RouteResponder<ServerTables<Fixtures, Models>, Models>,
     options: RouteOptions = {},
   ): void {
     this.#register("PUT", path, responder, options);
@@ -192,11 +193,40 @@ export class Server<
   #register(
     method: HttpMethod,
     path: string,
-    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
+    responder: RouteResponder<ServerTables<Fixtures, Models>, Models> | undefined,
     options: RouteOptions,
   ): void {
+    if (responder === undefined || typeof responder === "string") {
+      if (!isShorthandMethod(method)) {
+        throw new TypeError(`${method} routes require a responder.`);
+      }
+
+      const routeResponder = createShorthandHandler<ServerTables<Fixtures, Models>, Models>(
+        method,
+        path,
+        responder,
+      );
+      const routeOptions =
+        options.status === undefined
+          ? { ...options, status: method === "POST" ? 201 : 200 }
+          : options;
+
+      this.#router.add(method, joinPaths(this.namespace, path), routeResponder, routeOptions);
+      return;
+    }
+
     this.#router.add(method, joinPaths(this.namespace, path), responder, options);
   }
+}
+
+function isShorthandMethod(method: HttpMethod): method is ShorthandMethod {
+  return (
+    method === "DELETE" ||
+    method === "GET" ||
+    method === "PATCH" ||
+    method === "POST" ||
+    method === "PUT"
+  );
 }
 
 /**
@@ -248,18 +278,21 @@ function toResponse(
   result: JsonSerializable | JsonValue | Response | undefined,
   request: KajoRequest,
   serializers: SerializerRegistry,
+  status?: number,
 ): Response {
   if (result instanceof Response) {
     return result;
   }
 
   if (result === undefined) {
-    return new Response(null, { status: 204 });
+    return new Response(null, { status: status ?? 204 });
   }
 
   const serialized = serialize(result, request, serializers);
 
-  return Response.json(isJsonSerializable(serialized) ? serialized.toJSON() : serialized);
+  return Response.json(isJsonSerializable(serialized) ? serialized.toJSON() : serialized, {
+    status,
+  });
 }
 
 function isJsonSerializable(value: unknown): value is JsonSerializable {

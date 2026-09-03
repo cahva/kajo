@@ -64,4 +64,6 @@ export type RouteResponder<
 export interface RouteOptions {
   /** Delay the response by this many milliseconds. */
   readonly timing?: number;
+  /** Override the response status. */
+  readonly status?: number;
 }
