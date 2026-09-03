@@ -168,6 +168,31 @@ describe("polymorphic relationships", () => {
     );
   });
 
+  test("does not let relationship options clobber polymorphic metadata", () => {
+    const unsafeOptions = {
+      inverse: null,
+      kind: "invalid",
+      modelNames: ["missing"],
+      polymorphic: false,
+    } as never;
+    const server = createServer({
+      intercept: false,
+      models: {
+        car: model<{ make: string }>(),
+        comment: model<Comment>().extend({
+          commentable: belongsTo(["car", "watch"] as const, unsafeOptions),
+        }),
+        user: model<User>().extend({
+          things: hasMany(["car", "watch"] as const, unsafeOptions),
+        }),
+        watch: model<{ make: string }>(),
+      },
+    });
+
+    expect(server.schema.users.create({ name: "Ada" }).things.modelNames).toEqual(["car", "watch"]);
+    expect(server.schema.comments.create({ body: "Safe" }).commentable).toBeNull();
+  });
+
   test("stores and resolves heterogeneous hasMany relationships", () => {
     const server = createServer({
       intercept: false,

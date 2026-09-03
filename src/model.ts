@@ -74,9 +74,11 @@ export function belongsTo(
   target: string | readonly [string, ...string[]],
   options: RelationshipOptions = {},
 ): BelongsToDefinition | PolymorphicBelongsToDefinition {
+  const relationshipOptions: RelationshipOptions =
+    options.inverse === undefined ? {} : { inverse: options.inverse };
   return Array.isArray(target)
-    ? { ...options, kind: "belongsTo", modelNames: target, polymorphic: true }
-    : { kind: "belongsTo", modelName: target as string, ...options };
+    ? { ...relationshipOptions, kind: "belongsTo", modelNames: target, polymorphic: true }
+    : { ...relationshipOptions, kind: "belongsTo", modelName: target as string };
 }
 
 /**
@@ -94,9 +96,11 @@ export function hasMany(
   target: string | readonly [string, ...string[]],
   options: RelationshipOptions = {},
 ): HasManyDefinition | PolymorphicHasManyDefinition {
+  const relationshipOptions: RelationshipOptions =
+    options.inverse === undefined ? {} : { inverse: options.inverse };
   return Array.isArray(target)
-    ? { ...options, kind: "hasMany", modelNames: target, polymorphic: true }
-    : { kind: "hasMany", modelName: target as string, ...options };
+    ? { ...relationshipOptions, kind: "hasMany", modelNames: target, polymorphic: true }
+    : { ...relationshipOptions, kind: "hasMany", modelName: target as string };
 }
 
 /**
