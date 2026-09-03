@@ -79,6 +79,9 @@ and this project adheres to
   conversion, deterministic response selection, and explicit route overrides.
 - Local OpenAPI JSON Pointer resolution for path items, responses, examples,
   and schemas, with diagnostics for missing and circular references.
+- Deterministic JSON Schema response generation for OpenAPI operations without
+  examples, covering `const`, `default`, `enum`, composition keywords, string
+  formats, and typed placeholder synthesis.
 
 ### Changed
 

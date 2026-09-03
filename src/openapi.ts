@@ -34,7 +34,7 @@ export interface OpenApiResponse {
 export interface OpenApiMediaType {
   readonly example?: unknown;
   readonly examples?: Readonly<Record<string, OpenApiExample | OpenApiReference | undefined>>;
-  readonly schema?: OpenApiSchema | OpenApiReference;
+  readonly schema?: OpenApiSchema | OpenApiReference | boolean;
   readonly [key: string]: unknown;
 }
 
@@ -44,7 +44,23 @@ export interface OpenApiExample {
 }
 
 export interface OpenApiSchema {
+  readonly allOf?: readonly (OpenApiSchema | OpenApiReference | boolean)[];
+  readonly anyOf?: readonly (OpenApiSchema | OpenApiReference | boolean)[];
+  readonly const?: unknown;
+  readonly default?: unknown;
+  readonly enum?: readonly unknown[];
   readonly example?: unknown;
+  readonly examples?: readonly unknown[];
+  readonly exclusiveMinimum?: number;
+  readonly format?: string;
+  readonly items?: OpenApiSchema | OpenApiReference | boolean;
+  readonly minimum?: number;
+  readonly oneOf?: readonly (OpenApiSchema | OpenApiReference | boolean)[];
+  readonly properties?: Readonly<
+    Record<string, OpenApiSchema | OpenApiReference | boolean | undefined>
+  >;
+  readonly required?: readonly string[];
+  readonly type?: string | readonly string[];
   readonly [key: string]: unknown;
 }
 
@@ -226,9 +242,177 @@ function selectExample(
     }
   }
 
-  return mediaType.schema
-    ? (references.resolve(mediaType.schema, `schema for "${operation}"`) as OpenApiSchema).example
-    : undefined;
+  if (mediaType.schema === undefined) {
+    return undefined;
+  }
+
+  return generateSchemaValue(mediaType.schema, operation, references, new Set());
+}
+
+const FORMAT_VALUES: Readonly<Record<string, string>> = {
+  date: "2024-01-01",
+  "date-time": "2024-01-01T00:00:00Z",
+  duration: "P1D",
+  email: "user@example.com",
+  hostname: "example.com",
+  "idn-email": "user@example.com",
+  ipv4: "192.0.2.1",
+  ipv6: "2001:db8::1",
+  time: "00:00:00Z",
+  uri: "https://example.com/",
+  "uri-reference": "https://example.com/",
+  uuid: "00000000-0000-0000-0000-000000000000",
+};
+
+function generateSchemaValue(
+  schema: OpenApiSchema | OpenApiReference | boolean,
+  operation: string,
+  references: LocalReferenceResolver,
+  active: Set<object>,
+): unknown {
+  if (schema === true) {
+    return {};
+  }
+
+  if (schema === false) {
+    throw new TypeError(`OpenAPI schema for "${operation}" is "false" and permits no values.`);
+  }
+
+  const resolved = references.resolve(schema, `schema for "${operation}"`) as OpenApiSchema;
+
+  if (active.has(resolved)) {
+    throw new TypeError(
+      `Recursive OpenAPI schema for "${operation}" requires an explicit example.`,
+    );
+  }
+
+  if (Object.prototype.hasOwnProperty.call(resolved, "example")) {
+    return resolved.example;
+  }
+
+  if (Array.isArray(resolved.examples) && resolved.examples.length > 0) {
+    return resolved.examples[0];
+  }
+
+  if (Object.prototype.hasOwnProperty.call(resolved, "const")) {
+    return resolved.const;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(resolved, "default")) {
+    return resolved.default;
+  }
+
+  if (Array.isArray(resolved.enum) && resolved.enum.length > 0) {
+    return resolved.enum[0];
+  }
+
+  active.add(resolved);
+
+  try {
+    return synthesizeSchemaValue(resolved, operation, references, active);
+  } finally {
+    active.delete(resolved);
+  }
+}
+
+function synthesizeSchemaValue(
+  schema: OpenApiSchema,
+  operation: string,
+  references: LocalReferenceResolver,
+  active: Set<object>,
+): unknown {
+  if (Array.isArray(schema.allOf) && schema.allOf.length > 0) {
+    return mergeAllOf(schema.allOf, operation, references, active);
+  }
+
+  for (const branches of [schema.oneOf, schema.anyOf]) {
+    if (Array.isArray(branches) && branches.length > 0) {
+      return generateSchemaValue(branches[0], operation, references, active);
+    }
+  }
+
+  const type = firstNonNullType(schema.type);
+
+  switch (type) {
+    case undefined: {
+      return Array.isArray(schema.type) ? null : {};
+    }
+    case "string": {
+      return typeof schema.format === "string"
+        ? (FORMAT_VALUES[schema.format] ?? "string")
+        : "string";
+    }
+    case "integer":
+    case "number": {
+      if (typeof schema.minimum === "number") {
+        return schema.minimum;
+      }
+
+      return typeof schema.exclusiveMinimum === "number" ? schema.exclusiveMinimum + 1 : 0;
+    }
+    case "boolean": {
+      return true;
+    }
+    case "null": {
+      return null;
+    }
+    case "array": {
+      return schema.items === undefined
+        ? []
+        : [generateSchemaValue(schema.items, operation, references, active)];
+    }
+    case "object": {
+      const value: Record<string, unknown> = {};
+
+      for (const [name, property] of Object.entries(schema.properties ?? {}).sort(
+        ([left], [right]) => left.localeCompare(right),
+      )) {
+        if (property !== undefined) {
+          value[name] = generateSchemaValue(property, operation, references, active);
+        }
+      }
+
+      return value;
+    }
+    default: {
+      throw new TypeError(`OpenAPI schema for "${operation}" has unsupported type "${type}".`);
+    }
+  }
+}
+
+function mergeAllOf(
+  branches: readonly (OpenApiSchema | OpenApiReference | boolean)[],
+  operation: string,
+  references: LocalReferenceResolver,
+  active: Set<object>,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = {};
+
+  for (const branch of branches) {
+    const value = generateSchemaValue(branch, operation, references, active);
+
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw new TypeError(
+        `OpenAPI schema for "${operation}" has an "allOf" that does not produce an object.`,
+      );
+    }
+
+    Object.assign(merged, value);
+  }
+
+  return merged;
+}
+
+function firstNonNullType(type: OpenApiSchema["type"]): string | undefined {
+  if (typeof type === "string") {
+    return type;
+  }
+
+  if (!Array.isArray(type)) {
+    return undefined;
+  }
+
+  return type.find((entry): entry is string => typeof entry === "string" && entry !== "null");
 }
 
 class LocalReferenceResolver {
