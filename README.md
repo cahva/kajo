@@ -376,9 +376,10 @@ const server = createServer({
 });
 ```
 
-The first increment supports inline examples and concrete, `2XX`, or `default`
-success responses. Local and external `$ref` resolution, schema-generated
-values, and request validation are planned next.
+The first increment supports inline and locally referenced examples with
+concrete, `2XX`, or `default` success responses. Local JSON Pointer references
+can target path items, responses, examples, and schemas. External `$ref`
+resolution, schema-generated values, and request validation are planned next.
 
 Kajo owns same-origin routes by default in browsers. Set `urlPrefix` for an
 external API; requests outside that origin and namespace are ignored

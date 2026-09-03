@@ -77,6 +77,8 @@ and this project adheres to
   interception.
 - Initial OpenAPI 3.1 integration for example-backed operations, path-template
   conversion, deterministic response selection, and explicit route overrides.
+- Local OpenAPI JSON Pointer resolution for path items, responses, examples,
+  and schemas, with diagnostics for missing and circular references.
 
 ### Changed
 

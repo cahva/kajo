@@ -127,8 +127,9 @@ These are behavioral inputs, not commitments to preserve Mirage internals.
 ## Prioritized compatibility work
 
 1. Expand the issue-driven regression suite before declaring a stable API.
-2. Expand the initial OpenAPI 3.1 route adapter with `$ref` resolution,
+2. Expand the initial OpenAPI 3.1 route adapter with external `$ref` resolution,
    schema-generated values, and request validation.
 
-OpenAPI documents can already register deterministic example-backed routes;
-explicit Kajo routes remain the highest-precedence source of behavior.
+OpenAPI documents can register deterministic example-backed routes and resolve
+local JSON Pointers; explicit Kajo routes remain the highest-precedence source
+of behavior.

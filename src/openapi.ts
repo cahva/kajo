@@ -4,7 +4,7 @@ export type OpenApiMethod = Uppercase<(typeof OPENAPI_METHODS)[number]>;
 
 export interface OpenApiDocument {
   readonly openapi: string;
-  readonly paths: Readonly<Record<string, OpenApiPathItem | undefined>>;
+  readonly paths: Readonly<Record<string, OpenApiPathItem | OpenApiReference | undefined>>;
   readonly [key: string]: unknown;
 }
 
@@ -34,15 +34,17 @@ export interface OpenApiResponse {
 export interface OpenApiMediaType {
   readonly example?: unknown;
   readonly examples?: Readonly<Record<string, OpenApiExample | OpenApiReference | undefined>>;
-  readonly schema?: {
-    readonly example?: unknown;
-    readonly [key: string]: unknown;
-  };
+  readonly schema?: OpenApiSchema | OpenApiReference;
   readonly [key: string]: unknown;
 }
 
 export interface OpenApiExample {
   readonly value?: unknown;
+  readonly [key: string]: unknown;
+}
+
+export interface OpenApiSchema {
+  readonly example?: unknown;
   readonly [key: string]: unknown;
 }
 
@@ -73,13 +75,18 @@ export function compileOpenApiRoutes(document: OpenApiDocument): OpenApiRoute[] 
 
   const routes: OpenApiRoute[] = [];
   const registered = new Set<string>();
+  const references = new LocalReferenceResolver(document);
 
-  for (const [openApiPath, pathItem] of Object.entries(document.paths)) {
-    if (!pathItem) {
+  for (const [openApiPath, pathItemOrReference] of Object.entries(document.paths)) {
+    if (!pathItemOrReference) {
       continue;
     }
 
     const path = toKajoPath(openApiPath);
+    const pathItem = references.resolve(
+      pathItemOrReference,
+      `path item "${openApiPath}"`,
+    ) as OpenApiPathItem;
 
     for (const method of OPENAPI_METHODS) {
       const operation = pathItem[method];
@@ -99,7 +106,7 @@ export function compileOpenApiRoutes(document: OpenApiDocument): OpenApiRoute[] 
       routes.push({
         method: routeMethod,
         path,
-        response: exampleResponse(operation, identity),
+        response: exampleResponse(operation, identity, references),
       });
     }
   }
@@ -121,7 +128,11 @@ function toKajoPath(path: string): string {
   return converted;
 }
 
-function exampleResponse(operation: OpenApiOperation, identity: string): Response {
+function exampleResponse(
+  operation: OpenApiOperation,
+  identity: string,
+  references: LocalReferenceResolver,
+): Response {
   if (!operation.responses || typeof operation.responses !== "object") {
     throw new TypeError(
       `OpenAPI operation "${operation.operationId ?? identity}" has no responses.`,
@@ -136,12 +147,14 @@ function exampleResponse(operation: OpenApiOperation, identity: string): Respons
     );
   }
 
-  const response = dereference(
+  const response = references.resolve(
     selected.response,
     `response for "${operation.operationId ?? identity}"`,
-  );
+  ) as OpenApiResponse;
   const media = selectMediaType(response.content);
-  const body = media ? selectExample(media.value, operation.operationId ?? identity) : undefined;
+  const body = media
+    ? selectExample(media.value, operation.operationId ?? identity, references)
+    : undefined;
 
   if (selected.status === 204 || body === undefined) {
     return new Response(null, { status: selected.status });
@@ -187,7 +200,11 @@ function selectMediaType(
   return selected ? { type: selected[0], value: selected[1] } : undefined;
 }
 
-function selectExample(mediaType: OpenApiMediaType, operation: string): unknown {
+function selectExample(
+  mediaType: OpenApiMediaType,
+  operation: string,
+  references: LocalReferenceResolver,
+): unknown {
   if (Object.prototype.hasOwnProperty.call(mediaType, "example")) {
     return mediaType.example;
   }
@@ -199,25 +216,99 @@ function selectExample(mediaType: OpenApiMediaType, operation: string): unknown 
       continue;
     }
 
-    const example = dereference(candidate, `example "${name}" for "${operation}"`);
+    const example = references.resolve(
+      candidate,
+      `example "${name}" for "${operation}"`,
+    ) as OpenApiExample;
 
     if (Object.prototype.hasOwnProperty.call(example, "value")) {
       return example.value;
     }
   }
 
-  return mediaType.schema?.example;
+  return mediaType.schema
+    ? (references.resolve(mediaType.schema, `schema for "${operation}"`) as OpenApiSchema).example
+    : undefined;
 }
 
-function dereference<Value extends object>(
-  value: Value | OpenApiReference,
-  location: string,
-): Value {
-  if ("$ref" in value) {
-    throw new TypeError(`OpenAPI $ref is not supported yet at ${location}: "${value.$ref}".`);
+class LocalReferenceResolver {
+  constructor(private readonly document: OpenApiDocument) {}
+
+  resolve(value: object, location: string, seen = new Set<string>()): object {
+    if ("$ref" in value && typeof value.$ref !== "string") {
+      throw new TypeError(`OpenAPI $ref at ${location} must be a string.`);
+    }
+
+    if (!isReference(value)) {
+      return value;
+    }
+
+    const reference = value.$ref;
+
+    if (!reference.startsWith("#")) {
+      throw new TypeError(`External OpenAPI $ref is not supported at ${location}: "${reference}".`);
+    }
+
+    if (seen.has(reference)) {
+      throw new TypeError(`Circular OpenAPI $ref at ${location}: "${reference}".`);
+    }
+
+    seen.add(reference);
+    const target = this.resolvePointer(reference, location);
+    return this.resolve(target, location, seen);
   }
 
-  return value;
+  private resolvePointer(reference: string, location: string): object {
+    if (reference === "#") {
+      return this.document;
+    }
+
+    if (!reference.startsWith("#/")) {
+      throw new TypeError(`Invalid local OpenAPI $ref at ${location}: "${reference}".`);
+    }
+
+    let current: unknown = this.document;
+
+    for (const encodedToken of reference.slice(2).split("/")) {
+      const token = decodePointerToken(encodedToken, reference, location);
+
+      if (
+        typeof current !== "object" ||
+        current === null ||
+        !Object.prototype.hasOwnProperty.call(current, token)
+      ) {
+        throw new TypeError(`OpenAPI $ref at ${location} does not exist: "${reference}".`);
+      }
+
+      current = Reflect.get(current, token);
+    }
+
+    if (typeof current !== "object" || current === null || Array.isArray(current)) {
+      throw new TypeError(
+        `OpenAPI $ref at ${location} does not point to an object: "${reference}".`,
+      );
+    }
+
+    return current;
+  }
+}
+
+function isReference(value: object): value is OpenApiReference {
+  return "$ref" in value && typeof value.$ref === "string";
+}
+
+function decodePointerToken(token: string, reference: string, location: string): string {
+  try {
+    const decoded = decodeURIComponent(token);
+
+    if (/~(?:[^01]|$)/.test(decoded)) {
+      throw new TypeError();
+    }
+
+    return decoded.replaceAll("~1", "/").replaceAll("~0", "~");
+  } catch {
+    throw new TypeError(`Invalid local OpenAPI $ref at ${location}: "${reference}".`);
+  }
 }
 
 function mediaTypePriority(mediaType: string): number {

@@ -96,6 +96,7 @@ export type {
   OpenApiReference,
   OpenApiResponse,
   OpenApiRoute,
+  OpenApiSchema,
 } from "./openapi.ts";
 export { createServer, Server } from "./server.ts";
 export type {

@@ -98,6 +98,79 @@ describe("OpenAPI", () => {
     await expect(response?.json()).resolves.toEqual({ id: "1", title: "First" });
   });
 
+  test("resolves local path, response, example, and schema references", async () => {
+    const server = createServer({
+      intercept: false,
+      openapi: {
+        components: {
+          examples: {
+            "task/example": {
+              value: { id: "1", title: "Referenced" },
+            },
+          },
+          pathItems: {
+            Task: {
+              get: {
+                operationId: "getReferencedTask",
+                responses: {
+                  "200": { $ref: "#/components/responses/TaskAlias" },
+                },
+              },
+            },
+            TaskFromSchema: {
+              get: {
+                operationId: "getSchemaTask",
+                responses: {
+                  "200": {
+                    content: {
+                      "application/json": {
+                        schema: { $ref: "#/components/schemas/TaskExample" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            Task: {
+              content: {
+                "application/json": {
+                  examples: {
+                    task: { $ref: "#/components/examples/task~1example" },
+                  },
+                },
+              },
+            },
+            TaskAlias: { $ref: "#/components/responses/Task" },
+          },
+          schemas: {
+            TaskExample: {
+              example: { id: "2", title: "Schema example" },
+            },
+          },
+        },
+        openapi: "3.1.0",
+        paths: {
+          "/schema-task": { $ref: "#/components/pathItems/TaskFromSchema" },
+          "/tasks/{taskId}": { $ref: "#/components/pathItems/Task" },
+        },
+      },
+    });
+
+    const exampleResponse = await server.handle(new Request("https://example.test/tasks/1"));
+    const schemaResponse = await server.handle(new Request("https://example.test/schema-task"));
+
+    await expect(exampleResponse?.json()).resolves.toEqual({
+      id: "1",
+      title: "Referenced",
+    });
+    await expect(schemaResponse?.json()).resolves.toEqual({
+      id: "2",
+      title: "Schema example",
+    });
+  });
+
   test("rejects unsupported versions, invalid templates, and references clearly", () => {
     expect(() =>
       compileOpenApiRoutes({
@@ -123,14 +196,46 @@ describe("OpenAPI", () => {
             get: {
               operationId: "getTasks",
               responses: {
-                "200": { $ref: "#/components/responses/Tasks" },
+                "200": { $ref: "./responses.yaml#/Tasks" },
               },
             },
           },
         },
       }),
     ).toThrow(
-      'OpenAPI $ref is not supported yet at response for "getTasks": "#/components/responses/Tasks".',
+      'External OpenAPI $ref is not supported at response for "getTasks": "./responses.yaml#/Tasks".',
+    );
+    expect(() =>
+      compileOpenApiRoutes({
+        openapi: "3.1.0",
+        paths: {
+          "/tasks": { $ref: "#/components/pathItems/Missing" },
+        },
+      }),
+    ).toThrow(
+      'OpenAPI $ref at path item "/tasks" does not exist: "#/components/pathItems/Missing".',
+    );
+    expect(() =>
+      compileOpenApiRoutes({
+        components: {
+          responses: {
+            First: { $ref: "#/components/responses/Second" },
+            Second: { $ref: "#/components/responses/First" },
+          },
+        },
+        openapi: "3.1.0",
+        paths: {
+          "/tasks": {
+            get: {
+              responses: {
+                "200": { $ref: "#/components/responses/First" },
+              },
+            },
+          },
+        },
+      }),
+    ).toThrow(
+      'Circular OpenAPI $ref at response for "GET /tasks": "#/components/responses/First".',
     );
   });
 });
