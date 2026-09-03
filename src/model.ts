@@ -370,21 +370,152 @@ export class Collection<
   Models extends ModelRegistry = {},
   Relationships extends RelationshipRegistry = {},
 > implements Iterable<Model<Attributes, Models, Relationships>> {
+  readonly #saveMembership?: (models: Model<Attributes, Models, Relationships>[]) => void;
+
   constructor(
     readonly modelName: string,
     readonly models: Model<Attributes, Models, Relationships>[],
-  ) {}
+    saveMembership?: (models: Model<Attributes, Models, Relationships>[]) => void,
+  ) {
+    this.#saveMembership = saveMembership;
+  }
 
   get length(): number {
     return this.models.length;
+  }
+
+  add(model: Model<Attributes, Models, Relationships>): this {
+    this.#assertCompatible(model);
+
+    if (!this.includes(model)) {
+      this.models.push(model);
+    }
+
+    return this;
+  }
+
+  destroy(): void {
+    for (const model of this.models) {
+      model.destroy();
+    }
+  }
+
+  filter(
+    callback: (
+      model: Model<Attributes, Models, Relationships>,
+      index: number,
+      collection: this,
+    ) => boolean,
+  ): Collection<Attributes, Models, Relationships> {
+    return new Collection(
+      this.modelName,
+      this.models.filter((model, index) => callback(model, index, this)),
+    );
+  }
+
+  includes(model: Model<Attributes, Models, Relationships>): boolean {
+    return this.models.some(
+      (candidate) => candidate.modelName === model.modelName && candidate.id === model.id,
+    );
+  }
+
+  mergeCollection(collection: Collection<Attributes, Models, Relationships>): this {
+    if (collection.modelName !== this.modelName) {
+      throw new TypeError(
+        `Cannot merge collection:${collection.modelName} into collection:${this.modelName}.`,
+      );
+    }
+
+    for (const model of collection) {
+      this.add(model);
+    }
+
+    return this;
+  }
+
+  reload(): this {
+    for (const model of this.models) {
+      model.reload();
+    }
+
+    return this;
+  }
+
+  remove(model: Model<Attributes, Models, Relationships>): this {
+    const index = this.models.findIndex(
+      (candidate) => candidate.modelName === model.modelName && candidate.id === model.id,
+    );
+
+    if (index !== -1) {
+      this.models.splice(index, 1);
+    }
+
+    return this;
+  }
+
+  save(): this {
+    for (const model of this.models) {
+      model.save();
+    }
+
+    this.#saveMembership?.(this.models);
+    return this;
+  }
+
+  slice(begin?: number, end?: number): Collection<Attributes, Models, Relationships> {
+    return new Collection(this.modelName, this.models.slice(begin, end));
+  }
+
+  sort(
+    callback: (
+      left: Model<Attributes, Models, Relationships>,
+      right: Model<Attributes, Models, Relationships>,
+    ) => number,
+  ): Collection<Attributes, Models, Relationships> {
+    return new Collection(this.modelName, [...this.models].sort(callback));
   }
 
   toJSON(): StoredRecord<Attributes>[] {
     return this.models.map((instance) => instance.toJSON());
   }
 
+  toString(): string {
+    return `collection:${this.modelName}(${this.models
+      .map((model) => `${model.modelName}:${model.id}`)
+      .join(",")})`;
+  }
+
+  update(attributes: UpdateAttributes<Attributes>): this;
+  update<Name extends keyof UpdateAttributes<Attributes>>(
+    key: Name,
+    value: UpdateAttributes<Attributes>[Name],
+  ): this;
+  update(
+    attributesOrKey: UpdateAttributes<Attributes> | keyof UpdateAttributes<Attributes>,
+    value?: UpdateAttributes<Attributes>[keyof UpdateAttributes<Attributes>],
+  ): this {
+    const attributes =
+      typeof attributesOrKey === "object"
+        ? attributesOrKey
+        : ({ [attributesOrKey]: value } as UpdateAttributes<Attributes>);
+
+    for (const model of this.models) {
+      model.update(attributes);
+    }
+
+    return this;
+  }
+
   [Symbol.iterator](): Iterator<Model<Attributes, Models, Relationships>> {
     return this.models[Symbol.iterator]();
+  }
+
+  #assertCompatible(model: Model<Attributes, Models, Relationships>): void {
+    if (model.modelName !== this.modelName) {
+      throw new TypeError(
+        `Cannot add ${model.modelName}:${model.id} to collection:${this.modelName}.`,
+      );
+    }
   }
 }
 
@@ -1212,31 +1343,51 @@ function getRelationship<Models extends ModelRegistry>(
     Models,
     RelationshipRegistry
   >;
+  const withMembershipPersistence = (
+    collection: Collection<object, Models, RelationshipRegistry>,
+  ) =>
+    new Collection(collection.modelName, collection.models, (relatedModels) => {
+      setRelationship(
+        sourceModelName,
+        sourceRecord,
+        relationshipName,
+        relationship,
+        relatedModels,
+        models,
+        schema,
+      );
+    });
 
   if (inverse?.definition.kind === "belongsTo") {
     if (isPolymorphicBelongsTo(inverse.definition)) {
-      return targetCollection.find(
-        targetCollection
-          .all()
-          .models.filter((target) => {
-            const identifier = Reflect.get(target.attrs, foreignKey(inverse.name));
-            return (
-              isPolymorphicIdentifier(identifier) &&
-              identifier.type === sourceModelName &&
-              identifier.id === sourceRecord.id
-            );
-          })
-          .map(({ id }) => id),
+      return withMembershipPersistence(
+        targetCollection.find(
+          targetCollection
+            .all()
+            .models.filter((target) => {
+              const identifier = Reflect.get(target.attrs, foreignKey(inverse.name));
+              return (
+                isPolymorphicIdentifier(identifier) &&
+                identifier.type === sourceModelName &&
+                identifier.id === sourceRecord.id
+              );
+            })
+            .map(({ id }) => id),
+        ),
       );
     }
 
-    return targetCollection.where({
-      [foreignKey(inverse.name, inverse.definition)]: sourceRecord.id,
-    });
+    return withMembershipPersistence(
+      targetCollection.where({
+        [foreignKey(inverse.name, inverse.definition)]: sourceRecord.id,
+      }),
+    );
   }
 
   const ids = Reflect.get(sourceRecord, foreignKey(relationshipName, relationship));
-  return targetCollection.find(Array.isArray(ids) ? ids.map(String) : []);
+  return withMembershipPersistence(
+    targetCollection.find(Array.isArray(ids) ? ids.map(String) : []),
+  );
 }
 
 function setRelationship<Models extends ModelRegistry>(

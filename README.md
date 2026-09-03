@@ -153,6 +153,18 @@ server.schema.movies.findOrCreateBy({ title: "Arrival" });
 server.schema.movies.none(); // an empty, typed Collection
 ```
 
+Returned collections support typed, non-mutating `filter`, `slice`, and `sort`
+helpers, plus bulk lifecycle operations:
+
+```ts
+const arrivals = server.schema.movies.all().filter((movie) => movie.title.startsWith("Arrival"));
+arrivals.update({ title: "Arrival: Director's Cut" });
+arrivals.reload();
+
+// A hasMany collection persists membership changes when saved.
+user.posts.add(post).remove(draft).save();
+```
+
 Relationships are declared by extending a typed model:
 
 ```ts

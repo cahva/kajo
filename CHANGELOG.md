@@ -25,6 +25,8 @@ and this project adheres to
   automatic model response serialization.
 - Unsaved model lifecycle with `new`, `save`, `update`, `isNew`, and `isSaved`,
   plus schema collection `findOrCreateBy` and `none` helpers.
+- Typed collection membership, bulk lifecycle, filtering, sorting, slicing, and
+  string helpers, including persisted `hasMany` membership changes.
 - Typed `belongsTo` and `hasMany` relationships with inverse discovery,
   explicit inverses, and foreign-key synchronization.
 - Typed relationship ID properties and `new<Name>`/`create<Name>` association

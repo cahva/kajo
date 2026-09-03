@@ -60,6 +60,7 @@ change before the first stable version.
 | Typed `model()` definitions and schema collections                 | **Supported** | Runtime definitions are the source of relationship types.                                     |
 | Persisted model `attrs`, `update`, `save`, `reload`, and `destroy` | **Supported** | Destroyed-model operations have explicit diagnostics.                                         |
 | Collection `all`, `find`, `findBy`, `first`, `where`, and `create` | **Supported** | Results use typed models and iterable collections.                                            |
+| Collection result operations                                       | **Supported** | Includes membership, bulk lifecycle, filtering, sorting, slicing, and string helpers.         |
 | Unsaved models (`new`, `isNew`, `isSaved`)                         | **Supported** | Draft attributes and relationships are persisted when `save` or `update` is called.           |
 | `findOrCreateBy` and `none` schema helpers                         | **Supported** | Helpers return typed models and collections.                                                  |
 | `belongsTo` and `hasMany`                                          | **Supported** | Includes inverse discovery, explicit inverses, and synchronized foreign keys.                 |
