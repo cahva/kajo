@@ -1,16 +1,15 @@
 {
-  "name": "kajo",
+  "name": "@cahva/kajo",
   "version": "0.0.0",
-  "description": "A starter for creating a TypeScript package.",
-  "homepage": "https://github.com/author/library#readme",
+  "description": "Your backend on the horizon.",
+  "homepage": "https://github.com/cahva/kajo#readme",
   "bugs": {
-    "url": "https://github.com/author/library/issues"
+    "url": "https://github.com/cahva/kajo/issues"
   },
   "license": "MIT",
-  "author": "Author Name <author.name@mail.com>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/author/library.git"
+    "url": "git+https://github.com/cahva/kajo.git"
   },
   "files": [
     "dist"
@@ -20,20 +19,18 @@
     ".": "./dist/index.mjs",
     "./package.json": "./package.json"
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "build": "vp pack",
-    "dev": "vp pack --watch",
-    "test": "vp test",
     "check": "vp check",
-    "prepublishOnly": "vp run build",
+    "dev": "vp pack --watch",
+    "publish:check": "vp exec jsr publish --dry-run --allow-dirty",
+    "release": "vp exec jsr publish",
+    "test": "vp test",
     "prepare": "vp config"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
-    "bumpp": "^11.1.0",
+    "jsr": "0.14.3",
     "typescript": "^7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:"
