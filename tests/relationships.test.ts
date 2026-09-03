@@ -43,6 +43,34 @@ describe("relationships", () => {
     expect(user.posts.length).toBe(0);
   });
 
+  test("defers unsaved relationship synchronization until save", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        post: model<Post>().extend({
+          author: belongsTo("user"),
+        }),
+        user: model<User>().extend({
+          posts: hasMany("post"),
+        }),
+      },
+    });
+    const user = server.schema.users.create({ name: "Ada" });
+    const post = server.schema.posts.new({
+      author: user,
+      title: "Typed APIs",
+    });
+
+    expect(post.author).toBe(user);
+    expect(user.posts.length).toBe(0);
+
+    const saved = post.save();
+
+    expect(saved.author?.id).toBe(user.id);
+    expect(user.posts.models[0]?.id).toBe(saved.id);
+    expect(server.db.posts.find(saved.id)).toMatchObject({ authorId: user.id });
+  });
+
   test("synchronizes assignment through a hasMany inverse", () => {
     const server = createServer({
       intercept: false,

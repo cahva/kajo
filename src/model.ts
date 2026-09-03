@@ -118,6 +118,13 @@ export type ModelFor<Models extends ModelRegistry, Name extends string> = Name e
   ? Model<ModelAttributes<Models[Name]>, Models, ModelRelationships<Models[Name]>>
   : Model<object, Models>;
 
+export type NewModelFor<
+  Models extends ModelRegistry,
+  Name extends string,
+> = Name extends keyof Models
+  ? NewModel<ModelAttributes<Models[Name]>, Models, ModelRelationships<Models[Name]>>
+  : NewModel<object, Models>;
+
 type RelationshipValues<
   Models extends ModelRegistry,
   Relationships extends RelationshipRegistry,
@@ -155,6 +162,21 @@ export type Model<
   StoredRecord<Attributes> &
   RelationshipValues<Models, Relationships>;
 
+export type NewModelRecord<Attributes extends object> = Omit<Attributes, "id"> & {
+  readonly id: null;
+};
+
+/**
+ * A model instance that has not been persisted yet.
+ */
+export type NewModel<
+  Attributes extends object,
+  Models extends ModelRegistry = {},
+  Relationships extends RelationshipRegistry = {},
+> = NewModelInstance<Attributes, Models, Relationships> &
+  NewModelRecord<Attributes> &
+  RelationshipValues<Models, Relationships>;
+
 /**
  * Shared behavior for a persisted model.
  */
@@ -171,9 +193,35 @@ export interface ModelInstance<
   };
 
   destroy(): void;
+  isNew(): boolean;
+  isSaved(): boolean;
   reload(): Model<Attributes, Models, Relationships>;
   save(): Model<Attributes, Models, Relationships>;
   toJSON(): StoredRecord<Attributes>;
+  update(attributes: UpdateAttributes<Attributes>): Model<Attributes, Models, Relationships>;
+}
+
+/**
+ * Shared behavior for an unsaved model.
+ */
+export interface NewModelInstance<
+  Attributes extends object,
+  Models extends ModelRegistry = {},
+  Relationships extends RelationshipRegistry = {},
+> {
+  readonly attrs: NewModelRecord<Attributes>;
+  readonly isDestroyed: boolean;
+  readonly modelName: string;
+  readonly [MODEL_METADATA]: {
+    readonly relationships: Relationships;
+  };
+
+  destroy(): void;
+  isNew(): boolean;
+  isSaved(): boolean;
+  reload(): NewModel<Attributes, Models, Relationships>;
+  save(): Model<Attributes, Models, Relationships>;
+  toJSON(): NewModelRecord<Attributes>;
   update(attributes: UpdateAttributes<Attributes>): Model<Attributes, Models, Relationships>;
 }
 
@@ -247,15 +295,7 @@ export class ModelCollection<
   create(
     input: CreateModelAttributes<Attributes, Models, Relationships>,
   ): Model<Attributes, Models, Relationships> {
-    const attributes = { ...input } as Record<string, unknown>;
-    const relationshipValues = new Map<string, unknown>();
-
-    for (const name of Object.keys(this.#relationships)) {
-      if (name in attributes) {
-        relationshipValues.set(name, attributes[name]);
-        delete attributes[name];
-      }
-    }
+    const { attributes, relationshipValues } = splitModelInput(input, this.#relationships);
 
     const instance = this.#wrap(
       this.#collection.insert(attributes as InsertableRecord<Attributes>),
@@ -266,6 +306,21 @@ export class ModelCollection<
     }
 
     return instance;
+  }
+
+  new(
+    input: Omit<CreateModelAttributes<Attributes, Models, Relationships>, "id">,
+  ): NewModel<Attributes, Models, Relationships> {
+    const { attributes, relationshipValues } = splitModelInput(input, this.#relationships);
+    return createNewModel(
+      this.modelName,
+      this.#collection,
+      { ...attributes, id: null } as NewModelRecord<Attributes>,
+      relationshipValues,
+      this.#models,
+      this.#relationships,
+      this.#schema,
+    );
   }
 
   find(id: number | string): Model<Attributes, Models, Relationships> | null;
@@ -289,9 +344,26 @@ export class ModelCollection<
     return record ? this.#wrap(record) : null;
   }
 
+  findOrCreateBy(
+    query: RecordQuery<Attributes>,
+    attributes: Partial<CreateModelAttributes<Attributes, Models, Relationships>> = {},
+  ): Model<Attributes, Models, Relationships> {
+    return (
+      this.findBy(query) ??
+      this.create({
+        ...query,
+        ...attributes,
+      } as CreateModelAttributes<Attributes, Models, Relationships>)
+    );
+  }
+
   first(): Model<Attributes, Models, Relationships> | null {
     const record = this.#collection[0];
     return record ? this.#wrap(record) : null;
+  }
+
+  none(): Collection<Attributes, Models, Relationships> {
+    return this.#wrapMany([]);
   }
 
   where(query: RecordQuery<Attributes>): Collection<Attributes, Models, Relationships> {
@@ -409,6 +481,26 @@ export function singularize(name: string): string {
   return name.endsWith("s") ? name.slice(0, -1) : name;
 }
 
+function splitModelInput<Relationships extends RelationshipRegistry>(
+  input: object,
+  relationships: Relationships,
+): {
+  attributes: Record<string, unknown>;
+  relationshipValues: Map<string, unknown>;
+} {
+  const attributes = { ...input } as Record<string, unknown>;
+  const relationshipValues = new Map<string, unknown>();
+
+  for (const name of Object.keys(relationships)) {
+    if (name in attributes) {
+      relationshipValues.set(name, attributes[name]);
+      delete attributes[name];
+    }
+  }
+
+  return { attributes, relationshipValues };
+}
+
 function createModel<
   Attributes extends object,
   Models extends ModelRegistry,
@@ -436,6 +528,12 @@ function createModel<
     destroy() {
       collection.remove(record.id);
       isDestroyed = true;
+    },
+    isNew() {
+      return collection.find(record.id) === null;
+    },
+    isSaved() {
+      return collection.find(record.id) !== null;
     },
     reload() {
       const persisted = collection.find(record.id);
@@ -516,6 +614,216 @@ function createModel<
   });
 
   return proxy;
+}
+
+function createNewModel<
+  Attributes extends object,
+  Models extends ModelRegistry,
+  Relationships extends RelationshipRegistry,
+>(
+  modelName: string,
+  collection: DatabaseCollection<Attributes>,
+  initialRecord: NewModelRecord<Attributes>,
+  relationshipValues: Map<string, unknown>,
+  models: Models,
+  relationships: Relationships,
+  schema: () => Schema<DatabaseData, Models>,
+): NewModel<Attributes, Models, Relationships> {
+  let record: NewModelRecord<Attributes> | StoredRecord<Attributes> = initialRecord;
+  let isDestroyed = false;
+  let persisted = false;
+
+  const instance = {
+    [MODEL_METADATA]: { relationships },
+    get attrs() {
+      return record;
+    },
+    get isDestroyed() {
+      return isDestroyed;
+    },
+    modelName,
+    destroy() {
+      if (persisted) {
+        collection.remove((record as StoredRecord<Attributes>).id);
+        isDestroyed = true;
+      }
+    },
+    isNew() {
+      return !persisted || isDestroyed;
+    },
+    isSaved() {
+      return persisted && !isDestroyed;
+    },
+    reload() {
+      if (!persisted) {
+        return proxy;
+      }
+
+      if (isDestroyed) {
+        throw new Error(
+          `Cannot reload destroyed ${modelName}:${(record as StoredRecord<Attributes>).id}.`,
+        );
+      }
+
+      const current = collection.find((record as StoredRecord<Attributes>).id);
+
+      if (!current) {
+        throw new Error(
+          `Cannot reload destroyed ${modelName}:${(record as StoredRecord<Attributes>).id}.`,
+        );
+      }
+
+      record = current;
+      return proxy;
+    },
+    save() {
+      if (isDestroyed) {
+        throw new Error(
+          `Cannot save destroyed ${modelName}:${(record as StoredRecord<Attributes>).id}.`,
+        );
+      }
+
+      if (persisted) {
+        return proxy;
+      }
+
+      for (const [name, value] of relationshipValues) {
+        validateRelationshipValue(value, relationships[name], name);
+      }
+
+      const { id: _id, ...attributes } = record;
+      const inserted = collection.insert(attributes as InsertableRecord<Attributes>);
+      record = inserted;
+      persisted = true;
+
+      try {
+        for (const [name, value] of relationshipValues) {
+          setRelationship(modelName, inserted, name, relationships[name], value, models, schema());
+        }
+        relationshipValues.clear();
+      } catch (error) {
+        collection.remove(inserted.id);
+        record = initialRecord;
+        persisted = false;
+        throw error;
+      }
+
+      return proxy;
+    },
+    toJSON() {
+      return { ...record };
+    },
+    update(attributes: UpdateAttributes<Attributes>) {
+      for (const [name, value] of Object.entries(attributes)) {
+        Reflect.set(proxy, name, value);
+      }
+      return instance.save();
+    },
+  };
+
+  const proxy = new Proxy(instance, {
+    get(target, property, receiver) {
+      if (property in target) {
+        return Reflect.get(target, property, receiver);
+      }
+
+      if (typeof property === "string" && property in relationships) {
+        if (persisted) {
+          return getRelationship(
+            modelName,
+            record as StoredRecord<Attributes>,
+            property,
+            relationships[property],
+            models,
+            schema(),
+          );
+        }
+
+        return getNewRelationship(
+          relationshipValues.get(property),
+          relationships[property],
+          schema(),
+        );
+      }
+
+      return record[property as keyof typeof record];
+    },
+    set(target, property, value, receiver) {
+      if (property in target) {
+        return Reflect.set(target, property, value, receiver);
+      }
+
+      if (property === "id") {
+        throw new TypeError("Model ids cannot be changed.");
+      }
+
+      if (typeof property === "string" && property in relationships) {
+        if (persisted) {
+          setRelationship(
+            modelName,
+            record as StoredRecord<Attributes>,
+            property,
+            relationships[property],
+            value,
+            models,
+            schema(),
+          );
+        } else {
+          validateRelationshipValue(value, relationships[property], property);
+          relationshipValues.set(property, value);
+        }
+        return true;
+      }
+
+      Reflect.set(record, property, value);
+      return true;
+    },
+  }) as unknown as NewModel<Attributes, Models, Relationships>;
+
+  return proxy;
+}
+
+function getNewRelationship<Models extends ModelRegistry>(
+  value: unknown,
+  relationship: RelationshipDefinition,
+  schema: Schema<DatabaseData, Models>,
+): unknown {
+  if (relationship.kind === "belongsTo") {
+    return value ?? null;
+  }
+
+  if (value instanceof Collection) {
+    return value;
+  }
+
+  const collection = schema[pluralize(relationship.modelName)] as unknown as ModelCollection<
+    object,
+    Models,
+    RelationshipRegistry
+  >;
+  return Array.isArray(value)
+    ? collection.find(value.map((model) => asRuntimeModel(model).id))
+    : collection.none();
+}
+
+function validateRelationshipValue(
+  value: unknown,
+  relationship: RelationshipDefinition,
+  name: string,
+): void {
+  if (relationship.kind === "belongsTo") {
+    if (value !== null && value !== undefined) {
+      asRuntimeModel(value, name);
+    }
+    return;
+  }
+
+  if (!(value instanceof Collection) && !Array.isArray(value)) {
+    throw new TypeError('The "hasMany" relationship expects model instances.');
+  }
+
+  const values = value instanceof Collection ? value.models : value;
+  values.forEach((model) => asRuntimeModel(model));
 }
 
 function getRelationship<Models extends ModelRegistry>(

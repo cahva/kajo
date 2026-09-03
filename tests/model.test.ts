@@ -56,8 +56,86 @@ describe("models", () => {
     movie?.destroy();
 
     expect(movie?.isDestroyed).toBe(true);
+    expect(movie?.isNew()).toBe(true);
+    expect(movie?.isSaved()).toBe(false);
     expect(server.schema.movies.find(1)).toBeNull();
     expect(() => movie?.reload()).toThrow("Cannot reload destroyed movie:1.");
+  });
+
+  test("creates, updates, and saves unsaved model instances", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        movie: model<Movie>(),
+      },
+    });
+    const movie = server.schema.movies.new({
+      title: "Arrival",
+      year: 2016,
+    });
+
+    expectTypeOf(movie.id).toEqualTypeOf<null>();
+    expect(movie.id).toBeNull();
+    expect(movie.isNew()).toBe(true);
+    expect(movie.isSaved()).toBe(false);
+    expect(server.schema.movies.all().length).toBe(0);
+    expect(movie.reload()).toBe(movie);
+
+    movie.title = "Contact";
+    const saved = movie.save();
+
+    expectTypeOf(saved.id).toEqualTypeOf<string>();
+    expect(saved).toBe(movie);
+    expect(saved.id).toBe("1");
+    expect(saved.isNew()).toBe(false);
+    expect(saved.isSaved()).toBe(true);
+    expect(server.db.movies.find(1)?.title).toBe("Contact");
+  });
+
+  test("persists an unsaved model when it is updated", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        movie: model<Movie>(),
+      },
+    });
+    const movie = server.schema.movies.new({
+      title: "Arrival",
+      year: 2016,
+    });
+
+    const saved = movie.update({ title: "Contact" });
+
+    expect(saved.id).toBe("1");
+    expect(server.db.movies.find(1)).toEqual({
+      id: "1",
+      title: "Contact",
+      year: 2016,
+    });
+  });
+
+  test("finds or creates models and returns empty collections", () => {
+    const server = createServer({
+      fixtures: {
+        movies: [{ title: "Arrival", year: 2016 }],
+      },
+      intercept: false,
+      models: {
+        movie: model<Movie>(),
+      },
+    });
+
+    expect(server.schema.movies.none().models).toEqual([]);
+    expect(server.schema.movies.findOrCreateBy({ title: "Arrival" }).id).toBe("1");
+    expect(
+      server.schema.movies.findOrCreateBy(
+        { title: "Contact" },
+        {
+          year: 1997,
+        },
+      ).id,
+    ).toBe("2");
+    expect(server.schema.movies.all().length).toBe(2);
   });
 
   test("pluralizes common model names", () => {

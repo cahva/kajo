@@ -74,6 +74,20 @@ collections support `find`, `findBy`, `where`, `insert`, `firstOrCreate`,
 `update`, and `remove`. Use `loadData`, `emptyData`, and `dump` to manage the
 database as a whole.
 
+Schema collections also support unsaved models and common query helpers:
+
+```ts
+const draft = server.schema.movies.new({ title: "Contact" });
+draft.isNew(); // true
+
+const movie = draft.save();
+movie.id; // string
+movie.isSaved(); // true
+
+server.schema.movies.findOrCreateBy({ title: "Arrival" });
+server.schema.movies.none(); // an empty, typed Collection
+```
+
 Relationships are declared by extending a typed model:
 
 ```ts

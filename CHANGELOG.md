@@ -21,6 +21,8 @@ and this project adheres to
   mutations, and reset behavior.
 - Typed model definitions, schema collections, persisted model instances, and
   automatic model response serialization.
+- Unsaved model lifecycle with `new`, `save`, `update`, `isNew`, and `isSaved`,
+  plus schema collection `findOrCreateBy` and `none` helpers.
 - Typed `belongsTo` and `hasMany` relationships with inverse discovery,
   explicit inverses, and foreign-key synchronization.
 - Application and per-model serializers with roots, attribute filtering, key
