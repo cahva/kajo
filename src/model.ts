@@ -12,6 +12,7 @@ import type {
 declare const modelAttributes: unique symbol;
 declare const modelRelationships: unique symbol;
 export const MODEL_METADATA: unique symbol = Symbol("kajo.model");
+const MODEL_AFTER_SAVE: unique symbol = Symbol("kajo.model.afterSave");
 
 export interface RelationshipOptions {
   /**
@@ -88,6 +89,22 @@ export type Pluralize<Name extends string> = Name extends `${string}${"a" | "e" 
       ? `${Name}es`
       : `${Name}s`;
 
+export type Singularize<Name extends string> = Name extends `${infer Stem}ies`
+  ? `${Stem}y`
+  : Name extends `${infer Stem}ches`
+    ? `${Stem}ch`
+    : Name extends `${infer Stem}shes`
+      ? `${Stem}sh`
+      : Name extends `${infer Stem}ses`
+        ? `${Stem}s`
+        : Name extends `${infer Stem}xes`
+          ? `${Stem}x`
+          : Name extends `${infer Stem}zes`
+            ? `${Stem}z`
+            : Name extends `${infer Stem}s`
+              ? Stem
+              : Name;
+
 export type ModelTables<Models extends ModelRegistry> = {
   [Name in keyof Models as Pluralize<Name & string>]: readonly ModelAttributes<Models[Name]>[];
 };
@@ -151,6 +168,68 @@ type RelationshipInputs<
       : never;
 };
 
+type RelatedModelInput<
+  Models extends ModelRegistry,
+  Name extends string,
+> = Name extends keyof Models ? Omit<ModelCreateInput<Models, Name>, "id"> : object;
+
+type RelationshipIds<Relationships extends RelationshipRegistry> = {
+  [
+    Name in keyof Relationships as Name extends string
+      ? Relationships[Name] extends BelongsToDefinition
+        ? `${Name}Id`
+        : Relationships[Name] extends HasManyDefinition
+          ? `${Singularize<Name>}Ids`
+          : never
+      : never
+  ]: Relationships[Name] extends BelongsToDefinition ? string | null : readonly string[];
+};
+
+type RelationshipNewHelpers<
+  Models extends ModelRegistry,
+  Relationships extends RelationshipRegistry,
+> = {
+  [
+    Name in keyof Relationships as Name extends string
+      ? Relationships[Name] extends BelongsToDefinition
+        ? `new${Capitalize<Name>}`
+        : Relationships[Name] extends HasManyDefinition
+          ? `new${Capitalize<Singularize<Name>>}`
+          : never
+      : never
+  ]: Relationships[Name] extends RelationshipDefinition
+    ? (
+        attributes: RelatedModelInput<Models, Relationships[Name]["modelName"]>,
+      ) => NewModelFor<Models, Relationships[Name]["modelName"]>
+    : never;
+};
+
+type RelationshipCreateHelpers<
+  Models extends ModelRegistry,
+  Relationships extends RelationshipRegistry,
+> = {
+  [
+    Name in keyof Relationships as Name extends string
+      ? Relationships[Name] extends BelongsToDefinition
+        ? `create${Capitalize<Name>}`
+        : Relationships[Name] extends HasManyDefinition
+          ? `create${Capitalize<Singularize<Name>>}`
+          : never
+      : never
+  ]: Relationships[Name] extends RelationshipDefinition
+    ? (
+        attributes: RelatedModelInput<Models, Relationships[Name]["modelName"]>,
+      ) => ModelFor<Models, Relationships[Name]["modelName"]>
+    : never;
+};
+
+type RelationshipConveniences<
+  Models extends ModelRegistry,
+  Relationships extends RelationshipRegistry,
+> = RelationshipIds<Relationships> &
+  RelationshipNewHelpers<Models, Relationships> &
+  RelationshipCreateHelpers<Models, Relationships>;
+
 /**
  * A persisted model instance.
  */
@@ -160,7 +239,8 @@ export type Model<
   Relationships extends RelationshipRegistry = {},
 > = ModelInstance<Attributes, Models, Relationships> &
   StoredRecord<Attributes> &
-  RelationshipValues<Models, Relationships>;
+  RelationshipValues<Models, Relationships> &
+  RelationshipConveniences<Models, Relationships>;
 
 export type NewModelRecord<Attributes extends object> = Omit<Attributes, "id"> & {
   readonly id: null;
@@ -175,7 +255,8 @@ export type NewModel<
   Relationships extends RelationshipRegistry = {},
 > = NewModelInstance<Attributes, Models, Relationships> &
   NewModelRecord<Attributes> &
-  RelationshipValues<Models, Relationships>;
+  RelationshipValues<Models, Relationships> &
+  RelationshipConveniences<Models, Relationships>;
 
 /**
  * Shared behavior for a persisted model.
@@ -573,6 +654,20 @@ function createModel<
         return Reflect.get(target, property, receiver);
       }
 
+      if (typeof property === "string") {
+        const convenience = getRelationshipConvenience(
+          property,
+          relationships,
+          schema(),
+          (name) => Reflect.get(proxy, name),
+          (name, value) => Reflect.set(proxy, name, value),
+        );
+
+        if (convenience !== NO_RELATIONSHIP_CONVENIENCE) {
+          return convenience;
+        }
+      }
+
       if (typeof property === "string" && property in relationships) {
         return getRelationship(
           modelName,
@@ -593,6 +688,15 @@ function createModel<
 
       if (property === "id") {
         throw new TypeError("Model ids cannot be changed.");
+      }
+
+      if (
+        typeof property === "string" &&
+        setRelationshipId(property, value, relationships, schema(), (name, related) =>
+          Reflect.set(proxy, name, related),
+        )
+      ) {
+        return true;
       }
 
       if (typeof property === "string" && property in relationships) {
@@ -629,12 +733,16 @@ function createNewModel<
   relationships: Relationships,
   schema: () => Schema<DatabaseData, Models>,
 ): NewModel<Attributes, Models, Relationships> {
+  const afterSaveCallbacks: ((model: Model<Attributes, Models, Relationships>) => void)[] = [];
   let record: NewModelRecord<Attributes> | StoredRecord<Attributes> = initialRecord;
   let isDestroyed = false;
   let persisted = false;
 
   const instance = {
     [MODEL_METADATA]: { relationships },
+    [MODEL_AFTER_SAVE](callback: (model: Model<Attributes, Models, Relationships>) => void) {
+      afterSaveCallbacks.push(callback);
+    },
     get attrs() {
       return record;
     },
@@ -708,6 +816,10 @@ function createNewModel<
         throw error;
       }
 
+      for (const callback of afterSaveCallbacks.splice(0)) {
+        callback(proxy as unknown as Model<Attributes, Models, Relationships>);
+      }
+
       return proxy;
     },
     toJSON() {
@@ -725,6 +837,20 @@ function createNewModel<
     get(target, property, receiver) {
       if (property in target) {
         return Reflect.get(target, property, receiver);
+      }
+
+      if (typeof property === "string") {
+        const convenience = getRelationshipConvenience(
+          property,
+          relationships,
+          schema(),
+          (name) => Reflect.get(proxy, name),
+          (name, value) => Reflect.set(proxy, name, value),
+        );
+
+        if (convenience !== NO_RELATIONSHIP_CONVENIENCE) {
+          return convenience;
+        }
       }
 
       if (typeof property === "string" && property in relationships) {
@@ -755,6 +881,15 @@ function createNewModel<
 
       if (property === "id") {
         throw new TypeError("Model ids cannot be changed.");
+      }
+
+      if (
+        typeof property === "string" &&
+        setRelationshipId(property, value, relationships, schema(), (name, related) =>
+          Reflect.set(proxy, name, related),
+        )
+      ) {
+        return true;
       }
 
       if (typeof property === "string" && property in relationships) {
@@ -826,6 +961,135 @@ function validateRelationshipValue(
   values.forEach((model) => asRuntimeModel(model));
 }
 
+const NO_RELATIONSHIP_CONVENIENCE = Symbol("kajo.noRelationshipConvenience");
+
+function getRelationshipConvenience<Models extends ModelRegistry>(
+  property: string,
+  relationships: RelationshipRegistry,
+  schema: Schema<DatabaseData, Models>,
+  getRelated: (name: string) => unknown,
+  setRelated: (name: string, value: unknown) => boolean,
+): unknown {
+  for (const [name, relationship] of Object.entries(relationships)) {
+    const helperName =
+      relationship.kind === "belongsTo" ? capitalize(name) : capitalize(singularize(name));
+
+    if (property === foreignKey(name, relationship)) {
+      const related = getRelated(name);
+
+      if (relationship.kind === "belongsTo") {
+        return related === null ? null : asRuntimeModel(related, name).id;
+      }
+
+      return related instanceof Collection ? related.models.map(({ id }) => id) : [];
+    }
+
+    if (property !== `new${helperName}` && property !== `create${helperName}`) {
+      continue;
+    }
+
+    const targetCollection = schema[
+      pluralize(relationship.modelName)
+    ] as unknown as ModelCollection<object, Models, RelationshipRegistry>;
+
+    if (property === `create${helperName}`) {
+      return (attributes: object) => {
+        const target = targetCollection.create(attributes);
+        addRelatedModel(name, relationship, target, getRelated, setRelated);
+        return target;
+      };
+    }
+
+    return (attributes: object) => {
+      const target = targetCollection.new(
+        attributes as Omit<CreateModelAttributes<object, Models, RelationshipRegistry>, "id">,
+      );
+      const registerAfterSave = Reflect.get(target, MODEL_AFTER_SAVE) as (
+        callback: (model: Model<object, Models, RelationshipRegistry>) => void,
+      ) => void;
+      registerAfterSave((saved) => {
+        addRelatedModel(name, relationship, saved, getRelated, setRelated);
+      });
+      return target;
+    };
+  }
+
+  return NO_RELATIONSHIP_CONVENIENCE;
+}
+
+function setRelationshipId<Models extends ModelRegistry>(
+  property: string,
+  value: unknown,
+  relationships: RelationshipRegistry,
+  schema: Schema<DatabaseData, Models>,
+  setRelated: (name: string, value: unknown) => boolean,
+): boolean {
+  for (const [name, relationship] of Object.entries(relationships)) {
+    if (property !== foreignKey(name, relationship)) {
+      continue;
+    }
+
+    if (relationship.kind === "belongsTo" && (value === null || value === undefined)) {
+      setRelated(name, null);
+      return true;
+    }
+
+    const targetCollection = schema[
+      pluralize(relationship.modelName)
+    ] as unknown as ModelCollection<object, Models, RelationshipRegistry>;
+
+    if (relationship.kind === "belongsTo") {
+      const target = targetCollection.find(String(value));
+
+      if (!target) {
+        throw new Error(`No ${relationship.modelName} with id "${String(value)}" was found.`);
+      }
+
+      setRelated(name, target);
+      return true;
+    }
+
+    if (!Array.isArray(value)) {
+      throw new TypeError(`The "${property}" relationship id property expects an array of ids.`);
+    }
+
+    const ids = value.map(String);
+    const targets = targetCollection.find(ids);
+
+    if (targets.length !== ids.length) {
+      const found = new Set(targets.models.map(({ id }) => id));
+      const missing = ids.find((id) => !found.has(id));
+      throw new Error(`No ${relationship.modelName} with id "${missing}" was found.`);
+    }
+
+    setRelated(name, targets);
+    return true;
+  }
+
+  return false;
+}
+
+function addRelatedModel(
+  name: string,
+  relationship: RelationshipDefinition,
+  target: RuntimeModel,
+  getRelated: (name: string) => unknown,
+  setRelated: (name: string, value: unknown) => boolean,
+): void {
+  if (relationship.kind === "belongsTo") {
+    setRelated(name, target);
+    return;
+  }
+
+  const related = getRelated(name);
+  const models = related instanceof Collection ? related.models : [];
+  setRelated(name, [...models, target]);
+}
+
+function capitalize(value: string): string {
+  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+}
+
 function getRelationship<Models extends ModelRegistry>(
   sourceModelName: string,
   sourceRecord: StoredRecord<object>,
@@ -841,7 +1105,7 @@ function getRelationship<Models extends ModelRegistry>(
   >;
 
   if (relationship.kind === "belongsTo") {
-    const id = Reflect.get(sourceRecord, foreignKey(relationshipName));
+    const id = Reflect.get(sourceRecord, foreignKey(relationshipName, relationship));
     return id === undefined || id === null ? null : targetCollection.find(String(id));
   }
 
@@ -849,11 +1113,11 @@ function getRelationship<Models extends ModelRegistry>(
 
   if (inverse?.definition.kind === "belongsTo") {
     return targetCollection.where({
-      [foreignKey(inverse.name)]: sourceRecord.id,
+      [foreignKey(inverse.name, inverse.definition)]: sourceRecord.id,
     });
   }
 
-  const ids = Reflect.get(sourceRecord, collectionForeignKey(relationshipName));
+  const ids = Reflect.get(sourceRecord, foreignKey(relationshipName, relationship));
   return targetCollection.find(Array.isArray(ids) ? ids.map(String) : []);
 }
 
@@ -996,8 +1260,10 @@ function findInverse(
   return matches.length === 1 ? { definition: matches[0][1], name: matches[0][0] } : undefined;
 }
 
-function foreignKey(relationshipName: string): string {
-  return `${relationshipName}Id`;
+function foreignKey(relationshipName: string, relationship?: RelationshipDefinition): string {
+  return relationship?.kind === "hasMany"
+    ? collectionForeignKey(relationshipName)
+    : `${relationshipName}Id`;
 }
 
 function collectionForeignKey(relationshipName: string): string {

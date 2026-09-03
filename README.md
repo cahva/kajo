@@ -105,6 +105,18 @@ Kajo infers the inverse when there is exactly one match. Use
 `{ inverse: "relationshipName" }` to disambiguate, or `{ inverse: null }` for
 an association without an inverse.
 
+Relationship definitions add typed ID properties and creation helpers:
+
+```ts
+post.authorId = user.id;
+user.postIds; // string[]
+
+const draft = user.newPost({ title: "On the horizon" });
+draft.save(); // associates the saved post with user
+
+const post = user.createPost({ title: "A different light" });
+```
+
 Models and collections pass through an application or model-specific
 `Serializer`. Serializers control root keys, selected attributes, key
 transforms, relationship IDs, sideloading, and embedding:

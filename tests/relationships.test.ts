@@ -29,7 +29,11 @@ describe("relationships", () => {
     });
 
     expectTypeOf(post.author?.name).toEqualTypeOf<string | undefined>();
+    expectTypeOf(post.authorId).toEqualTypeOf<string | null>();
+    expectTypeOf(user.postIds).toEqualTypeOf<readonly string[]>();
     expect(post.author?.id).toBe(user.id);
+    expect(post.authorId).toBe(user.id);
+    expect(user.postIds).toEqual([post.id]);
     expect(user.posts.models[0]?.id).toBe(post.id);
     expect(server.db.posts.find(post.id)).toEqual({
       authorId: user.id,
@@ -40,7 +44,13 @@ describe("relationships", () => {
     post.author = null;
 
     expect(post.author).toBeNull();
+    expect(post.authorId).toBeNull();
     expect(user.posts.length).toBe(0);
+
+    post.authorId = user.id;
+
+    expect(server.schema.posts.find(post.id)?.author?.id).toBe(user.id);
+    expect(user.postIds).toEqual([post.id]);
   });
 
   test("defers unsaved relationship synchronization until save", () => {
@@ -69,6 +79,70 @@ describe("relationships", () => {
     expect(saved.author?.id).toBe(user.id);
     expect(user.posts.models[0]?.id).toBe(saved.id);
     expect(server.db.posts.find(saved.id)).toMatchObject({ authorId: user.id });
+  });
+
+  test("creates related models through typed association helpers", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        post: model<Post>().extend({
+          author: belongsTo("user"),
+        }),
+        user: model<User>().extend({
+          posts: hasMany("post"),
+        }),
+      },
+    });
+    const user = server.schema.users.create({ name: "Ada" });
+
+    const draft = user.newPost({ title: "A draft" });
+    expectTypeOf(draft.id).toEqualTypeOf<null>();
+    expect(draft.id).toBeNull();
+    expect(user.posts.length).toBe(0);
+
+    const savedDraft = draft.save();
+    expect(savedDraft.author?.id).toBe(user.id);
+    expect(user.postIds).toEqual([savedDraft.id]);
+
+    const created = user.createPost({ title: "Published" });
+    expectTypeOf(created.title).toEqualTypeOf<string>();
+    expect(created.author?.id).toBe(user.id);
+    expect(user.postIds).toEqual([savedDraft.id, created.id]);
+
+    const authorDraft = created.newAuthor({ name: "Linnea" });
+    expect(authorDraft.id).toBeNull();
+    expect(created.authorId).toBe(user.id);
+    expect(authorDraft.save().posts.models[0]?.id).toBe(created.id);
+
+    const replacement = created.createAuthor({ name: "Sofia" });
+    expectTypeOf(replacement.name).toEqualTypeOf<string>();
+    expect(created.authorId).toBe(replacement.id);
+  });
+
+  test("sets hasMany relationships through id properties", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        post: model<Post>().extend({
+          author: belongsTo("user"),
+        }),
+        user: model<User>().extend({
+          posts: hasMany("post"),
+        }),
+      },
+    });
+    const user = server.schema.users.create({ name: "Ada" });
+    const first = server.schema.posts.create({ title: "First" });
+    const second = server.schema.posts.create({ title: "Second" });
+
+    user.postIds = [second.id, first.id];
+
+    expect(user.postIds).toEqual([first.id, second.id]);
+    expect(first.authorId).toBe(user.id);
+    expect(second.authorId).toBe(user.id);
+    expect(() => {
+      user.postIds = ["missing"];
+    }).toThrow('No post with id "missing" was found.');
   });
 
   test("synchronizes assignment through a hasMany inverse", () => {

@@ -59,6 +59,7 @@ export type {
   RelationshipOptions,
   RelationshipRegistry,
   Schema,
+  Singularize,
 } from "./model.ts";
 export { logRequestToConsole } from "./logging.ts";
 export type {

@@ -25,6 +25,8 @@ and this project adheres to
   plus schema collection `findOrCreateBy` and `none` helpers.
 - Typed `belongsTo` and `hasMany` relationships with inverse discovery,
   explicit inverses, and foreign-key synchronization.
+- Typed relationship ID properties and `new<Name>`/`create<Name>` association
+  helpers.
 - Application and per-model serializers with roots, attribute filtering, key
   transforms, relationship IDs, sideloading, and embedding.
 - Conventional CRUD route shorthands with inferred or explicit schema
