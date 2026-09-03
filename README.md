@@ -204,17 +204,26 @@ const models = {
   }),
   photo: model<{ url: string }>(),
   post: model<{ title: string }>(),
+  user: model<{ name: string }>().extend({
+    things: hasMany(["post", "photo"] as const),
+  }),
 };
 
 comment.commentable = post; // Post | Photo | null
 comment.commentableId; // { type: "post" | "photo"; id: string } | null
 comment.createCommentable("photo", { url: "/horizon.jpg" });
+
+user.things; // PolymorphicCollection containing posts and photos
+user.thingIds; // Array<{ type: "post" | "photo"; id: string }>
+user.createThing("post", { title: "On the horizon" });
 ```
 
-The `{ type, id }` identifier is preserved by `RestSerializer`. Included
-polymorphic resources are sideloaded under the root for their concrete model.
-Polymorphic factory associations must be supplied as explicit model overrides,
-because `association()` cannot infer which target to create.
+Polymorphic relationships use `PolymorphicCollection` for heterogeneous
+to-many results. Their `{ type, id }` identifiers are preserved by
+`RestSerializer`, and included resources are sideloaded under the root for
+their concrete model. Polymorphic factory associations must be supplied as
+explicit model overrides, because `association()` cannot infer which target to
+create.
 
 Destroying a model automatically clears foreign keys and stored ID references
 from dependent models, preventing dangling relationships.

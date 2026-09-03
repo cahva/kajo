@@ -2,6 +2,7 @@ import type { KajoRequest } from "./http.ts";
 import {
   Collection,
   MODEL_METADATA,
+  PolymorphicCollection,
   pluralize,
   singularize,
   type RelationshipDefinition,
@@ -165,7 +166,12 @@ export class Serializer {
       };
     }
 
-    return { [this.keyForRelationshipIds(relationshipName)]: models.map(({ id }) => id) };
+    return {
+      [this.keyForRelationshipIds(relationshipName)]:
+        relationship.polymorphic === true
+          ? models.map(({ id, modelName: type }) => ({ id, type }))
+          : models.map(({ id }) => id),
+    };
   }
 }
 
@@ -291,7 +297,7 @@ function serializeModel(
 }
 
 function relationshipModels(value: unknown): SerializableModel[] {
-  if (value instanceof Collection) {
+  if (value instanceof Collection || value instanceof PolymorphicCollection) {
     return value.models.filter(isSerializableModel);
   }
 

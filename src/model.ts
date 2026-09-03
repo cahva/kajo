@@ -40,12 +40,22 @@ export interface PolymorphicBelongsToDefinition<
 export interface HasManyDefinition<Target extends string = string> extends RelationshipOptions {
   readonly kind: "hasMany";
   readonly modelName: Target;
+  readonly polymorphic?: false;
+}
+
+export interface PolymorphicHasManyDefinition<
+  Targets extends readonly string[] = readonly string[],
+> extends RelationshipOptions {
+  readonly kind: "hasMany";
+  readonly modelNames: Targets;
+  readonly polymorphic: true;
 }
 
 export type RelationshipDefinition =
   | BelongsToDefinition
   | HasManyDefinition
-  | PolymorphicBelongsToDefinition;
+  | PolymorphicBelongsToDefinition
+  | PolymorphicHasManyDefinition;
 
 export type RelationshipRegistry = Record<string, RelationshipDefinition>;
 
@@ -74,9 +84,19 @@ export function belongsTo(
  */
 export function hasMany<Target extends string>(
   modelName: Target,
+  options?: RelationshipOptions,
+): HasManyDefinition<Target>;
+export function hasMany<const Targets extends readonly [string, ...string[]]>(
+  modelNames: Targets,
+  options?: RelationshipOptions,
+): PolymorphicHasManyDefinition<Targets>;
+export function hasMany(
+  target: string | readonly [string, ...string[]],
   options: RelationshipOptions = {},
-): HasManyDefinition<Target> {
-  return { kind: "hasMany", modelName, ...options };
+): HasManyDefinition | PolymorphicHasManyDefinition {
+  return Array.isArray(target)
+    ? { kind: "hasMany", modelNames: target, polymorphic: true, ...options }
+    : { kind: "hasMany", modelName: target as string, ...options };
 }
 
 /**
@@ -162,14 +182,15 @@ export interface PolymorphicIdentifier<Type extends string = string> {
   readonly type: Type;
 }
 
-type RelationshipModelName<Relationship extends RelationshipDefinition> =
-  Relationship extends PolymorphicBelongsToDefinition<infer Targets>
-    ? Targets[number]
-    : Relationship extends BelongsToDefinition<infer Target>
+type RelationshipModelName<Relationship extends RelationshipDefinition> = Relationship extends
+  | PolymorphicBelongsToDefinition<infer Targets>
+  | PolymorphicHasManyDefinition<infer Targets>
+  ? Targets[number]
+  : Relationship extends BelongsToDefinition<infer Target>
+    ? Target
+    : Relationship extends HasManyDefinition<infer Target>
       ? Target
-      : Relationship extends HasManyDefinition<infer Target>
-        ? Target
-        : never;
+      : never;
 
 export type NewModelFor<
   Models extends ModelRegistry,
@@ -186,9 +207,11 @@ type RelationshipValues<
     | BelongsToDefinition
     | PolymorphicBelongsToDefinition
     ? ModelFor<Models, RelationshipModelName<Relationships[Name]>> | null
-    : Relationships[Name] extends HasManyDefinition<infer Target>
-      ? CollectionFor<Models, Target>
-      : never;
+    : Relationships[Name] extends PolymorphicHasManyDefinition<infer Targets>
+      ? PolymorphicCollection<Models, Targets>
+      : Relationships[Name] extends HasManyDefinition<infer Target>
+        ? CollectionFor<Models, Target>
+        : never;
 };
 
 type CollectionFor<Models extends ModelRegistry, Name extends string> = Name extends keyof Models
@@ -203,9 +226,11 @@ type RelationshipInputs<
     | BelongsToDefinition
     | PolymorphicBelongsToDefinition
     ? ModelFor<Models, RelationshipModelName<Relationships[Name]>> | null
-    : Relationships[Name] extends HasManyDefinition<infer Target>
-      ? CollectionFor<Models, Target> | readonly ModelFor<Models, Target>[]
-      : never;
+    : Relationships[Name] extends PolymorphicHasManyDefinition<infer Targets>
+      ? PolymorphicCollection<Models, Targets> | readonly ModelFor<Models, Targets[number]>[]
+      : Relationships[Name] extends HasManyDefinition<infer Target>
+        ? CollectionFor<Models, Target> | readonly ModelFor<Models, Target>[]
+        : never;
 };
 
 type RelatedModelInput<
@@ -220,7 +245,7 @@ type RelationshipIds<Relationships extends RelationshipRegistry> = {
         ? `${Name}Id`
         : Relationships[Name] extends PolymorphicBelongsToDefinition
           ? `${Name}Id`
-          : Relationships[Name] extends HasManyDefinition
+          : Relationships[Name] extends HasManyDefinition | PolymorphicHasManyDefinition
             ? `${Singularize<Name>}Ids`
             : never
       : never
@@ -228,7 +253,9 @@ type RelationshipIds<Relationships extends RelationshipRegistry> = {
     ? PolymorphicIdentifier<RelationshipModelName<Relationships[Name]>> | null
     : Relationships[Name] extends BelongsToDefinition
       ? string | null
-      : readonly string[];
+      : Relationships[Name] extends PolymorphicHasManyDefinition
+        ? readonly PolymorphicIdentifier<RelationshipModelName<Relationships[Name]>>[]
+        : readonly string[];
 };
 
 type RelationshipNewHelpers<
@@ -239,11 +266,13 @@ type RelationshipNewHelpers<
     Name in keyof Relationships as Name extends string
       ? Relationships[Name] extends BelongsToDefinition | PolymorphicBelongsToDefinition
         ? `new${Capitalize<Name>}`
-        : Relationships[Name] extends HasManyDefinition
+        : Relationships[Name] extends HasManyDefinition | PolymorphicHasManyDefinition
           ? `new${Capitalize<Singularize<Name>>}`
           : never
       : never
-  ]: Relationships[Name] extends PolymorphicBelongsToDefinition<infer Targets>
+  ]: Relationships[Name] extends
+    | PolymorphicBelongsToDefinition<infer Targets>
+    | PolymorphicHasManyDefinition<infer Targets>
     ? <Target extends Targets[number]>(
         modelName: Target,
         attributes: RelatedModelInput<Models, Target>,
@@ -263,11 +292,13 @@ type RelationshipCreateHelpers<
     Name in keyof Relationships as Name extends string
       ? Relationships[Name] extends BelongsToDefinition | PolymorphicBelongsToDefinition
         ? `create${Capitalize<Name>}`
-        : Relationships[Name] extends HasManyDefinition
+        : Relationships[Name] extends HasManyDefinition | PolymorphicHasManyDefinition
           ? `create${Capitalize<Singularize<Name>>}`
           : never
       : never
-  ]: Relationships[Name] extends PolymorphicBelongsToDefinition<infer Targets>
+  ]: Relationships[Name] extends
+    | PolymorphicBelongsToDefinition<infer Targets>
+    | PolymorphicHasManyDefinition<infer Targets>
     ? <Target extends Targets[number]>(
         modelName: Target,
         attributes: RelatedModelInput<Models, Target>,
@@ -514,6 +545,157 @@ export class Collection<
     if (model.modelName !== this.modelName) {
       throw new TypeError(
         `Cannot add ${model.modelName}:${model.id} to collection:${this.modelName}.`,
+      );
+    }
+  }
+}
+
+type PolymorphicModelFor<
+  Models extends ModelRegistry,
+  Targets extends readonly string[],
+> = ModelFor<Models, Targets[number]>;
+
+type PolymorphicUpdateAttributes<
+  Models extends ModelRegistry,
+  Targets extends readonly string[],
+> = {
+  [Name in Targets[number] & keyof Models]: UpdateAttributes<ModelAttributes<Models[Name]>>;
+}[Targets[number] & keyof Models];
+
+/**
+ * A heterogeneous result from a polymorphic to-many relationship.
+ */
+export class PolymorphicCollection<
+  Models extends ModelRegistry,
+  Targets extends readonly string[] = readonly string[],
+> implements Iterable<PolymorphicModelFor<Models, Targets>> {
+  readonly #saveMembership?: (models: PolymorphicModelFor<Models, Targets>[]) => void;
+
+  constructor(
+    readonly modelNames: Targets,
+    readonly models: PolymorphicModelFor<Models, Targets>[],
+    saveMembership?: (models: PolymorphicModelFor<Models, Targets>[]) => void,
+  ) {
+    this.#saveMembership = saveMembership;
+  }
+
+  get length(): number {
+    return this.models.length;
+  }
+
+  add(model: PolymorphicModelFor<Models, Targets>): this {
+    this.#assertCompatible(model);
+
+    if (!this.includes(model)) {
+      this.models.push(model);
+    }
+
+    return this;
+  }
+
+  destroy(): void {
+    for (const model of this.models) {
+      model.destroy();
+    }
+  }
+
+  filter(
+    callback: (
+      model: PolymorphicModelFor<Models, Targets>,
+      index: number,
+      collection: this,
+    ) => boolean,
+  ): PolymorphicCollection<Models, Targets> {
+    return new PolymorphicCollection(
+      this.modelNames,
+      this.models.filter((model, index) => callback(model, index, this)),
+    );
+  }
+
+  includes(model: PolymorphicModelFor<Models, Targets>): boolean {
+    return this.models.some(
+      (candidate) => candidate.modelName === model.modelName && candidate.id === model.id,
+    );
+  }
+
+  mergeCollection(collection: PolymorphicCollection<Models, Targets>): this {
+    for (const model of collection) {
+      this.add(model);
+    }
+
+    return this;
+  }
+
+  reload(): this {
+    for (const model of this.models) {
+      model.reload();
+    }
+
+    return this;
+  }
+
+  remove(model: PolymorphicModelFor<Models, Targets>): this {
+    const index = this.models.findIndex(
+      (candidate) => candidate.modelName === model.modelName && candidate.id === model.id,
+    );
+
+    if (index !== -1) {
+      this.models.splice(index, 1);
+    }
+
+    return this;
+  }
+
+  save(): this {
+    for (const model of this.models) {
+      model.save();
+    }
+
+    this.#saveMembership?.(this.models);
+    return this;
+  }
+
+  slice(begin?: number, end?: number): PolymorphicCollection<Models, Targets> {
+    return new PolymorphicCollection(this.modelNames, this.models.slice(begin, end));
+  }
+
+  sort(
+    callback: (
+      left: PolymorphicModelFor<Models, Targets>,
+      right: PolymorphicModelFor<Models, Targets>,
+    ) => number,
+  ): PolymorphicCollection<Models, Targets> {
+    return new PolymorphicCollection(this.modelNames, [...this.models].sort(callback));
+  }
+
+  toJSON(): StoredRecord<object>[] {
+    return this.models.map((instance) => instance.toJSON());
+  }
+
+  toString(): string {
+    return `polymorphicCollection(${this.models
+      .map((model) => `${model.modelName}:${model.id}`)
+      .join(",")})`;
+  }
+
+  update(attributes: PolymorphicUpdateAttributes<Models, Targets>): this {
+    for (const model of this.models) {
+      Reflect.apply(Reflect.get(model, "update"), model, [attributes]);
+    }
+
+    return this;
+  }
+
+  [Symbol.iterator](): Iterator<PolymorphicModelFor<Models, Targets>> {
+    return this.models[Symbol.iterator]();
+  }
+
+  #assertCompatible(model: PolymorphicModelFor<Models, Targets>): void {
+    if (!this.modelNames.includes(model.modelName)) {
+      throw new TypeError(
+        `Cannot add ${model.modelName}:${model.id} to a polymorphic collection accepting ${this.modelNames.join(
+          ", ",
+        )}.`,
       );
     }
   }
@@ -1117,8 +1299,21 @@ function getNewRelationship<Models extends ModelRegistry>(
     return value ?? null;
   }
 
-  if (value instanceof Collection) {
+  if (value instanceof Collection || value instanceof PolymorphicCollection) {
     return value;
+  }
+
+  if (isPolymorphicHasMany(relationship)) {
+    const related = Array.isArray(value)
+      ? value.map((model) => {
+          asRuntimeModel(model);
+          return model;
+        })
+      : [];
+    return new PolymorphicCollection(
+      relationship.modelNames,
+      related as unknown as PolymorphicModelFor<Models, typeof relationship.modelNames>[],
+    );
   }
 
   const collection = schema[pluralize(relationship.modelName)] as unknown as ModelCollection<
@@ -1144,11 +1339,16 @@ function validateRelationshipValue(
     return;
   }
 
-  if (!(value instanceof Collection) && !Array.isArray(value)) {
+  if (
+    !(value instanceof Collection) &&
+    !(value instanceof PolymorphicCollection) &&
+    !Array.isArray(value)
+  ) {
     throw new TypeError('The "hasMany" relationship expects model instances.');
   }
 
-  const values = value instanceof Collection ? value.models : value;
+  const values =
+    value instanceof Collection || value instanceof PolymorphicCollection ? value.models : value;
   values.forEach((model) => {
     const target = asRuntimeModel(model);
     assertRelationshipTarget(relationship, target.modelName, name);
@@ -1182,7 +1382,13 @@ function getRelationshipConvenience<Models extends ModelRegistry>(
           : model.id;
       }
 
-      return related instanceof Collection ? related.models.map(({ id }) => id) : [];
+      const relatedModels =
+        related instanceof Collection || related instanceof PolymorphicCollection
+          ? related.models
+          : [];
+      return isPolymorphicHasMany(relationship)
+        ? relatedModels.map(({ id, modelName: type }) => ({ id, type }))
+        : relatedModels.map(({ id }) => id);
     }
 
     if (property !== `new${helperName}` && property !== `create${helperName}`) {
@@ -1217,7 +1423,7 @@ function getRelationshipConvenience<Models extends ModelRegistry>(
 
     const persist = property === `create${helperName}`;
 
-    if (isPolymorphicBelongsTo(relationship)) {
+    if (isPolymorphicBelongsTo(relationship) || isPolymorphicHasMany(relationship)) {
       return (targetModelName: string, attributes: object) =>
         createRelated(targetModelName, attributes, persist);
     }
@@ -1265,6 +1471,31 @@ function setRelationshipId<Models extends ModelRegistry>(
       return true;
     }
 
+    if (isPolymorphicHasMany(relationship)) {
+      if (!Array.isArray(value)) {
+        throw new TypeError(`The "${property}" relationship id property expects an array of ids.`);
+      }
+
+      const targets = value.map((item) => {
+        const identifier = asPolymorphicIdentifier(item, property);
+        assertRelationshipTarget(relationship, identifier.type, name);
+        const collection = schema[pluralize(identifier.type)] as unknown as ModelCollection<
+          object,
+          Models,
+          RelationshipRegistry
+        >;
+        const target = collection.find(identifier.id);
+
+        if (!target) {
+          throw new Error(`No ${identifier.type} with id "${identifier.id}" was found.`);
+        }
+
+        return target;
+      });
+      setRelated(name, targets);
+      return true;
+    }
+
     const targetCollection = schema[
       pluralize(relationship.modelName)
     ] as unknown as ModelCollection<object, Models, RelationshipRegistry>;
@@ -1302,7 +1533,8 @@ function addRelatedModel(
   }
 
   const related = getRelated(name);
-  const models = related instanceof Collection ? related.models : [];
+  const models =
+    related instanceof Collection || related instanceof PolymorphicCollection ? related.models : [];
   setRelated(name, [...models, target]);
 }
 
@@ -1335,6 +1567,87 @@ function getRelationship<Models extends ModelRegistry>(
       RelationshipRegistry
     >;
     return targetCollection.find(identifier.id);
+  }
+
+  if (isPolymorphicHasMany(relationship)) {
+    const stored = Reflect.get(sourceRecord, foreignKey(relationshipName, relationship));
+    const identifiers = Array.isArray(stored)
+      ? stored.map((value) => asPolymorphicIdentifier(value, foreignKey(relationshipName)))
+      : [];
+    const related: RuntimeModel[] = [];
+    const included = new Set<string>();
+
+    for (const identifier of identifiers) {
+      assertRelationshipTarget(relationship, identifier.type, relationshipName);
+      const targetCollection = schema[pluralize(identifier.type)] as unknown as ModelCollection<
+        object,
+        Models,
+        RelationshipRegistry
+      >;
+      const target = targetCollection.find(identifier.id);
+
+      if (target) {
+        const inverse = findInverse(sourceModelName, relationship, models, identifier.type);
+        const inverseValue =
+          inverse?.definition.kind === "belongsTo"
+            ? Reflect.get(target.attrs, foreignKey(inverse.name))
+            : undefined;
+        const belongsToSource =
+          inverse?.definition.kind !== "belongsTo" ||
+          (isPolymorphicBelongsTo(inverse.definition)
+            ? isPolymorphicIdentifier(inverseValue) &&
+              inverseValue.type === sourceModelName &&
+              inverseValue.id === sourceRecord.id
+            : String(inverseValue) === sourceRecord.id);
+
+        if (!belongsToSource) {
+          continue;
+        }
+
+        related.push(target);
+        included.add(`${identifier.type}:${identifier.id}`);
+      }
+    }
+
+    for (const targetModelName of relationship.modelNames) {
+      const targetCollection = schema[pluralize(targetModelName)] as unknown as ModelCollection<
+        object,
+        Models,
+        RelationshipRegistry
+      >;
+      const inverse = findInverse(sourceModelName, relationship, models, targetModelName);
+
+      if (inverse?.definition.kind === "belongsTo") {
+        for (const target of targetCollection.all()) {
+          const inverseValue = Reflect.get(target.attrs, foreignKey(inverse.name));
+          const belongsToSource = isPolymorphicBelongsTo(inverse.definition)
+            ? isPolymorphicIdentifier(inverseValue) &&
+              inverseValue.type === sourceModelName &&
+              inverseValue.id === sourceRecord.id
+            : String(inverseValue) === sourceRecord.id;
+
+          if (belongsToSource && !included.has(`${targetModelName}:${target.id}`)) {
+            related.push(target);
+          }
+        }
+      }
+    }
+
+    return new PolymorphicCollection(
+      relationship.modelNames,
+      related as unknown as PolymorphicModelFor<Models, typeof relationship.modelNames>[],
+      (relatedModels) => {
+        setRelationship(
+          sourceModelName,
+          sourceRecord,
+          relationshipName,
+          relationship,
+          relatedModels,
+          models,
+          schema,
+        );
+      },
+    );
   }
 
   const inverse = findInverse(sourceModelName, relationship, models);
@@ -1452,8 +1765,120 @@ function setRelationship<Models extends ModelRegistry>(
     return;
   }
 
+  if (isPolymorphicHasMany(relationship)) {
+    const values: unknown[] =
+      value instanceof Collection || value instanceof PolymorphicCollection
+        ? value.models
+        : Array.isArray(value)
+          ? value
+          : [];
+    const targets = values.map((target) => asRuntimeModel(target));
+    targets.forEach((target) =>
+      assertRelationshipTarget(relationship, target.modelName, relationshipName),
+    );
+    const selected = new Set(targets.map((target) => `${target.modelName}:${target.id}`));
+    const relationshipKey = collectionForeignKey(relationshipName);
+    const previous = Array.isArray(Reflect.get(sourceRecord, relationshipKey))
+      ? (Reflect.get(sourceRecord, relationshipKey) as unknown[])
+          .filter(isPolymorphicIdentifier)
+          .map(({ id, type }) => `${type}:${id}`)
+      : [];
+
+    Reflect.set(
+      sourceRecord,
+      relationshipKey,
+      targets
+        .filter(
+          (target) =>
+            findInverse(sourceModelName, relationship, models, target.modelName)?.definition
+              .kind !== "belongsTo",
+        )
+        .map(({ id, modelName: type }) => ({ id, type })),
+    );
+
+    for (const targetModelName of relationship.modelNames) {
+      const inverse = findInverse(sourceModelName, relationship, models, targetModelName);
+
+      if (!inverse) {
+        continue;
+      }
+
+      const targetCollection = schema[pluralize(targetModelName)] as unknown as ModelCollection<
+        object,
+        Models,
+        RelationshipRegistry
+      >;
+
+      for (const target of targetCollection.all()) {
+        const identity = `${targetModelName}:${target.id}`;
+        const isSelected = selected.has(identity);
+        const wasSelected = previous.includes(identity);
+
+        if (!isSelected && !wasSelected && inverse.definition.kind !== "belongsTo") {
+          continue;
+        }
+
+        if (inverse.definition.kind === "belongsTo") {
+          const inverseKey = foreignKey(inverse.name);
+          const inverseValue = Reflect.get(target.attrs, inverseKey);
+          const belongsToSource = isPolymorphicBelongsTo(inverse.definition)
+            ? isPolymorphicIdentifier(inverseValue) &&
+              inverseValue.type === sourceModelName &&
+              inverseValue.id === sourceRecord.id
+            : String(inverseValue) === sourceRecord.id;
+
+          if (isSelected) {
+            Reflect.set(
+              target.attrs,
+              inverseKey,
+              isPolymorphicBelongsTo(inverse.definition)
+                ? { id: sourceRecord.id, type: sourceModelName }
+                : sourceRecord.id,
+            );
+          } else if (belongsToSource) {
+            Reflect.deleteProperty(target.attrs, inverseKey);
+          }
+          continue;
+        }
+
+        const inverseKey = collectionForeignKey(inverse.name);
+        const inverseValues = Array.isArray(Reflect.get(target.attrs, inverseKey))
+          ? [...(Reflect.get(target.attrs, inverseKey) as unknown[])]
+          : [];
+
+        if (isPolymorphicHasMany(inverse.definition)) {
+          const sourceIdentity = `${sourceModelName}:${sourceRecord.id}`;
+          const withoutSource = inverseValues.filter(
+            (item) =>
+              !isPolymorphicIdentifier(item) || `${item.type}:${item.id}` !== sourceIdentity,
+          );
+          Reflect.set(
+            target.attrs,
+            inverseKey,
+            isSelected
+              ? [...withoutSource, { id: sourceRecord.id, type: sourceModelName }]
+              : withoutSource,
+          );
+        } else {
+          const ids = new Set(inverseValues.map(String));
+          if (isSelected) {
+            ids.add(sourceRecord.id);
+          } else {
+            ids.delete(sourceRecord.id);
+          }
+          Reflect.set(target.attrs, inverseKey, [...ids]);
+        }
+      }
+    }
+    return;
+  }
+
   const values: unknown[] =
-    value instanceof Collection ? value.models : Array.isArray(value) ? value : [];
+    value instanceof Collection || value instanceof PolymorphicCollection
+      ? value.models
+      : Array.isArray(value)
+        ? value
+        : [];
   const targets = values.map((target) => asRuntimeModel(target));
   targets.forEach((target) =>
     assertRelationshipTarget(relationship, target.modelName, relationshipName),
@@ -1513,6 +1938,25 @@ function setRelationship<Models extends ModelRegistry>(
 
     for (const target of targetCollection.all()) {
       if (!selectedIds.has(target.id) && !previousIds.has(target.id)) {
+        continue;
+      }
+
+      if (isPolymorphicHasMany(inverse.definition)) {
+        const sourceIdentity = `${sourceModelName}:${sourceRecord.id}`;
+        const inverseIds = Array.isArray(Reflect.get(target.attrs, inverseKey))
+          ? (Reflect.get(target.attrs, inverseKey) as unknown[])
+          : [];
+        const withoutSource = inverseIds.filter(
+          (value) =>
+            !isPolymorphicIdentifier(value) || `${value.type}:${value.id}` !== sourceIdentity,
+        );
+        Reflect.set(
+          target.attrs,
+          inverseKey,
+          selectedIds.has(target.id)
+            ? [...withoutSource, { id: sourceRecord.id, type: sourceModelName }]
+            : withoutSource,
+        );
         continue;
       }
 
@@ -1576,7 +2020,14 @@ function disassociateDependents<Models extends ModelRegistry>(
           Reflect.set(
             ownerRecord,
             relationshipKey,
-            ids.map(String).filter((id) => id !== targetRecord.id),
+            isPolymorphicHasMany(relationship)
+              ? ids.filter(
+                  (value) =>
+                    !isPolymorphicIdentifier(value) ||
+                    value.type !== targetModelName ||
+                    value.id !== targetRecord.id,
+                )
+              : ids.map(String).filter((id) => id !== targetRecord.id),
           );
         }
       }
@@ -1692,8 +2143,16 @@ function isPolymorphicBelongsTo(
   return relationship.kind === "belongsTo" && relationship.polymorphic === true;
 }
 
+function isPolymorphicHasMany(
+  relationship: RelationshipDefinition,
+): relationship is PolymorphicHasManyDefinition {
+  return relationship.kind === "hasMany" && relationship.polymorphic === true;
+}
+
 function relationshipModelNames(relationship: RelationshipDefinition): readonly string[] {
-  return isPolymorphicBelongsTo(relationship) ? relationship.modelNames : [relationship.modelName];
+  return isPolymorphicBelongsTo(relationship) || isPolymorphicHasMany(relationship)
+    ? relationship.modelNames
+    : [relationship.modelName];
 }
 
 function assertRelationshipTarget(

@@ -13,6 +13,10 @@ interface Post {
   title: string;
 }
 
+interface User {
+  name: string;
+}
+
 function createCommentServer() {
   return createServer({
     intercept: false,
@@ -162,5 +166,109 @@ describe("polymorphic relationships", () => {
     expect(() => Reflect.set(comment, "commentableId", { id: "1", type: "user" })).toThrow(
       'The "commentable" relationship does not accept models of type "user".',
     );
+  });
+
+  test("stores and resolves heterogeneous hasMany relationships", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        car: model<{ make: string }>(),
+        user: model<User>().extend({
+          things: hasMany(["car", "watch"] as const, { inverse: null }),
+        }),
+        watch: model<{ make: string }>(),
+      },
+    });
+    const car = server.schema.cars.create({ make: "Volvo" });
+    const watch = server.schema.watches.create({ make: "Leijona" });
+    const user = server.schema.users.create({ name: "Ada", things: [watch, car] });
+
+    expectTypeOf(user.things.models).toEqualTypeOf<(typeof car | typeof watch)[]>();
+    expectTypeOf(user.thingIds).toEqualTypeOf<
+      readonly { readonly id: string; readonly type: "car" | "watch" }[]
+    >();
+    expect(user.things.models.map(({ modelName }) => modelName)).toEqual(["watch", "car"]);
+    expect(user.thingIds).toEqual([
+      { id: watch.id, type: "watch" },
+      { id: car.id, type: "car" },
+    ]);
+
+    user.thingIds = [{ id: watch.id, type: "watch" }];
+    expect(user.things.models.map(({ modelName }) => modelName)).toEqual(["watch"]);
+
+    watch.destroy();
+    expect(user.thingIds).toEqual([]);
+  });
+
+  test("synchronizes polymorphic hasMany inverses and convenience helpers", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        car: model<{ make: string }>().extend({
+          owner: belongsTo("user", { inverse: "things" }),
+        }),
+        user: model<User>().extend({
+          things: hasMany(["car", "watch"] as const, { inverse: "owner" }),
+        }),
+        watch: model<{ make: string }>().extend({
+          owner: belongsTo("user", { inverse: "things" }),
+        }),
+      },
+    });
+    const user = server.schema.users.create({ name: "Ada" });
+    const car = server.schema.cars.create({ make: "Volvo", owner: user });
+    const watch = user.createThing("watch", { make: "Leijona" });
+
+    expectTypeOf(watch.make).toEqualTypeOf<string>();
+    expect(user.things.models.map(({ modelName }) => modelName)).toEqual(["car", "watch"]);
+    expect(user.thingIds).toEqual([
+      { id: car.id, type: "car" },
+      { id: watch.id, type: "watch" },
+    ]);
+
+    user.things.remove(car).save();
+
+    expect(car.owner).toBeNull();
+    expect(watch.owner?.id).toBe(user.id);
+    expect(user.thingIds).toEqual([{ id: watch.id, type: "watch" }]);
+  });
+
+  test("serializes polymorphic hasMany ids and concrete sideloads", async () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        car: model<{ make: string }>(),
+        user: model<User>().extend({
+          things: hasMany(["car", "watch"] as const, { inverse: null }),
+        }),
+        watch: model<{ make: string }>(),
+      },
+      routes() {
+        this.get("/users/:id", (schema, request) => schema.users.find(request.params.id));
+      },
+      serializers: {
+        user: RestSerializer.extend({ include: ["things"] }),
+      },
+      seeds(server) {
+        const car = server.schema.cars.create({ make: "Volvo" });
+        const watch = server.schema.watches.create({ make: "Leijona" });
+        server.schema.users.create({ name: "Ada", things: [car, watch] });
+      },
+    });
+
+    const response = await server.handle(new Request("https://example.test/users/1"));
+
+    await expect(response?.json()).resolves.toEqual({
+      cars: [{ id: "1", make: "Volvo" }],
+      user: {
+        id: "1",
+        name: "Ada",
+        thingIds: [
+          { id: "1", type: "car" },
+          { id: "1", type: "watch" },
+        ],
+      },
+      watches: [{ id: "1", make: "Leijona" }],
+    });
   });
 });

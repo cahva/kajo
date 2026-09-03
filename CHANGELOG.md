@@ -33,6 +33,8 @@ and this project adheres to
   helpers.
 - Typed polymorphic belongs-to relationships with explicit target unions,
   `{ type, id }` identifiers, inverse synchronization, and serializer support.
+- Typed polymorphic has-many relationships with heterogeneous collections,
+  convenience helpers, inverse synchronization, cleanup, and serializer support.
 - Automatic relationship cleanup when a model is destroyed.
 - Application and per-model serializers with roots, attribute filtering, key
   transforms, relationship IDs, sideloading, and embedding.

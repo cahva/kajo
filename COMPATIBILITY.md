@@ -55,18 +55,18 @@ change before the first stable version.
 
 ## Models and relationships
 
-| Mirage capability                                                  | Kajo status   | Notes                                                                                         |
-| ------------------------------------------------------------------ | ------------- | --------------------------------------------------------------------------------------------- |
-| Typed `model()` definitions and schema collections                 | **Supported** | Runtime definitions are the source of relationship types.                                     |
-| Persisted model `attrs`, `update`, `save`, `reload`, and `destroy` | **Supported** | Destroyed-model operations have explicit diagnostics.                                         |
-| Collection `all`, `find`, `findBy`, `first`, `where`, and `create` | **Supported** | Results use typed models and iterable collections.                                            |
-| Collection result operations                                       | **Supported** | Includes membership, bulk lifecycle, filtering, sorting, slicing, and string helpers.         |
-| Unsaved models (`new`, `isNew`, `isSaved`)                         | **Supported** | Draft attributes and relationships are persisted when `save` or `update` is called.           |
-| `findOrCreateBy` and `none` schema helpers                         | **Supported** | Helpers return typed models and collections.                                                  |
-| `belongsTo` and `hasMany`                                          | **Supported** | Includes inverse discovery, explicit inverses, and synchronized foreign keys.                 |
-| Relationship ID properties and association helpers                 | **Supported** | Includes typed setters and `new<Name>`/`create<Name>` helpers.                                |
-| Polymorphic relationships                                          | **Partial**   | Typed `belongsTo` unions, IDs, inverses, and serialization; polymorphic `hasMany` is planned. |
-| Relationship-dependent deletion behavior                           | **Supported** | Destroy clears belongs-to and stored has-many references on dependent models.                 |
+| Mirage capability                                                  | Kajo status   | Notes                                                                                     |
+| ------------------------------------------------------------------ | ------------- | ----------------------------------------------------------------------------------------- |
+| Typed `model()` definitions and schema collections                 | **Supported** | Runtime definitions are the source of relationship types.                                 |
+| Persisted model `attrs`, `update`, `save`, `reload`, and `destroy` | **Supported** | Destroyed-model operations have explicit diagnostics.                                     |
+| Collection `all`, `find`, `findBy`, `first`, `where`, and `create` | **Supported** | Results use typed models and iterable collections.                                        |
+| Collection result operations                                       | **Supported** | Includes membership, bulk lifecycle, filtering, sorting, slicing, and string helpers.     |
+| Unsaved models (`new`, `isNew`, `isSaved`)                         | **Supported** | Draft attributes and relationships are persisted when `save` or `update` is called.       |
+| `findOrCreateBy` and `none` schema helpers                         | **Supported** | Helpers return typed models and collections.                                              |
+| `belongsTo` and `hasMany`                                          | **Supported** | Includes inverse discovery, explicit inverses, and synchronized foreign keys.             |
+| Relationship ID properties and association helpers                 | **Supported** | Includes typed setters and `new<Name>`/`create<Name>` helpers.                            |
+| Polymorphic relationships                                          | **Supported** | Typed to-one and heterogeneous to-many unions, IDs, inverses, helpers, and serialization. |
+| Relationship-dependent deletion behavior                           | **Supported** | Destroy clears belongs-to and stored has-many references on dependent models.             |
 
 ## Factories and data setup
 

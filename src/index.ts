@@ -41,7 +41,15 @@ export type {
   RouteResponder,
   RouteResult,
 } from "./http.ts";
-export { belongsTo, Collection, createSchema, hasMany, model, ModelCollection } from "./model.ts";
+export {
+  belongsTo,
+  Collection,
+  createSchema,
+  hasMany,
+  model,
+  ModelCollection,
+  PolymorphicCollection,
+} from "./model.ts";
 export type {
   BelongsToDefinition,
   HasManyDefinition,
@@ -59,6 +67,7 @@ export type {
   NewModelRecord,
   Pluralize,
   PolymorphicBelongsToDefinition,
+  PolymorphicHasManyDefinition,
   PolymorphicIdentifier,
   RelationshipDefinition,
   RelationshipOptions,
