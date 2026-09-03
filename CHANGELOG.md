@@ -79,5 +79,11 @@ and this project adheres to
 ### Fixed
 
 - Added an unambiguous root command for launching the task-board example.
+- Normalized polymorphic relationship identifiers across fixture reads,
+  destruction cleanup, inverse synchronization, and diagnostics.
+- Preserved serializer roots, transforms, filtering, and type discriminators
+  for polymorphic collections and embedded relationships.
+- Validated unsaved polymorphic relationships immediately and restricted bulk
+  updates to attributes shared by every target model.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD

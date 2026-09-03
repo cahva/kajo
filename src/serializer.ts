@@ -207,6 +207,10 @@ export function serialize(
     return value;
   }
 
+  if (primary.isPolymorphic) {
+    return serializePolymorphicCollection(primary.models, request, serializers);
+  }
+
   const sideloads = new Map<string, Sideload>();
   const visited = new Set<string>();
   const primarySerializer = serializerFor(primary.modelName, serializers);
@@ -273,9 +277,12 @@ function serializeModel(
     const related = relationshipModels(relationshipValue);
 
     if (serializer.embed) {
-      const embedded = related.map((model) =>
-        serializeModel(model, request, serializers, sideloads, new Set(visited)),
-      );
+      const embedded = related.map((model) => {
+        const serialized = serializeModel(model, request, serializers, sideloads, new Set(visited));
+        return relationship.kind === "hasMany" && relationship.polymorphic === true
+          ? { ...serialized, type: model.modelName }
+          : serialized;
+      });
       json[serializer.keyForEmbeddedRelationship(name)] =
         relationship.kind === "belongsTo" ? (embedded[0] ?? null) : embedded;
       continue;
@@ -306,14 +313,27 @@ function relationshipModels(value: unknown): SerializableModel[] {
 
 function toPrimaryResource(value: unknown):
   | {
+      readonly isPolymorphic: true;
+      readonly models: SerializableModel[];
+    }
+  | {
       readonly isCollection: boolean;
+      readonly isPolymorphic: false;
       readonly modelName: string;
       readonly models: SerializableModel[];
     }
   | undefined {
+  if (value instanceof PolymorphicCollection) {
+    return {
+      isPolymorphic: true,
+      models: value.models.filter(isSerializableModel),
+    };
+  }
+
   if (value instanceof Collection) {
     return {
       isCollection: true,
+      isPolymorphic: false,
       modelName: value.modelName,
       models: value.models.filter(isSerializableModel),
     };
@@ -322,10 +342,44 @@ function toPrimaryResource(value: unknown):
   return isSerializableModel(value)
     ? {
         isCollection: false,
+        isPolymorphic: false,
         modelName: value.modelName,
         models: [value],
       }
     : undefined;
+}
+
+function serializePolymorphicCollection(
+  models: SerializableModel[],
+  request: KajoRequest,
+  serializers: SerializerRegistry,
+): unknown {
+  const sideloads = new Map<string, Sideload>();
+  const serialized = models.map((model) => ({
+    data: serializeModel(model, request, serializers, sideloads, new Set()),
+    model,
+    serializer: serializerFor(model.modelName, serializers),
+  }));
+
+  if (serialized.every(({ serializer }) => !serializer.root)) {
+    return serialized.map(({ data }) => data);
+  }
+
+  const payload: Record<string, unknown[]> = {};
+
+  for (const { data, model, serializer } of serialized) {
+    const root = serializer.rootKey(model.modelName, true);
+    (payload[root] ??= []).push(data);
+  }
+
+  for (const sideload of sideloads.values()) {
+    const data = [...sideload.models.values()].map((resource) =>
+      serializeModel(resource, request, serializers, sideloads, new Set()),
+    );
+    (payload[sideload.root] ??= []).push(...data);
+  }
+
+  return payload;
 }
 
 function isSerializableModel(value: unknown): value is SerializableModel {

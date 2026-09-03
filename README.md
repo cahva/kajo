@@ -223,7 +223,8 @@ to-many results. Their `{ type, id }` identifiers are preserved by
 `RestSerializer`, and included resources are sideloaded under the root for
 their concrete model. Polymorphic factory associations must be supplied as
 explicit model overrides, because `association()` cannot infer which target to
-create.
+create. Bulk `update()` only accepts attributes shared by every target model,
+preventing target-specific fields from leaking onto unrelated records.
 
 Destroying a model automatically clears foreign keys and stored ID references
 from dependent models, preventing dangling relationships.

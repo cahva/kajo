@@ -271,4 +271,171 @@ describe("polymorphic relationships", () => {
       watches: [{ id: "1", make: "Leijona" }],
     });
   });
+
+  test("reports malformed fixture identifiers using the hasMany key", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        car: model<{ make: string }>(),
+        user: model<User>().extend({
+          things: hasMany(["car", "watch"] as const, { inverse: null }),
+        }),
+        watch: model<{ make: string }>(),
+      },
+    });
+    server.db.users.insert({ name: "Ada", thingIds: ["1"] } as never);
+
+    expect(() => server.schema.users.find(1)?.things).toThrow(
+      'The "thingIds" relationship id property expects an object with "type" and "id"; received "1".',
+    );
+  });
+
+  test("normalizes numeric polymorphic ids while reading and destroying models", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        car: model<{ make: string }>(),
+        comment: model<Comment>().extend({
+          commentable: belongsTo(["car", "watch"] as const, { inverse: null }),
+        }),
+        user: model<User>().extend({
+          things: hasMany(["car", "watch"] as const, { inverse: null }),
+        }),
+        watch: model<{ make: string }>(),
+      },
+    });
+    server.db.cars.insert({ make: "Volvo" });
+    server.db.comments.insert({
+      body: "Nice",
+      commentableId: { id: 1, type: "car" },
+    } as never);
+    server.db.users.insert({
+      name: "Ada",
+      thingIds: [{ id: 1, type: "car" }],
+    } as never);
+
+    const car = server.schema.cars.find(1);
+    expect(server.schema.users.find(1)?.things.models[0]?.id).toBe(car?.id);
+    expect(server.schema.comments.find(1)?.commentable?.id).toBe(car?.id);
+
+    car?.destroy();
+
+    expect(server.db.users.find(1)).toMatchObject({ thingIds: [] });
+    expect(server.db.comments.find(1)).not.toHaveProperty("commentableId");
+  });
+
+  test("updates attributes shared by every polymorphic member", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        car: model<{ make: string }>(),
+        user: model<User>().extend({
+          things: hasMany(["car", "watch"] as const, { inverse: null }),
+        }),
+        watch: model<{ make: string }>(),
+      },
+    });
+    const car = server.schema.cars.create({ make: "Volvo" });
+    const watch = server.schema.watches.create({ make: "Leijona" });
+    const user = server.schema.users.create({ name: "Ada", things: [car, watch] });
+
+    user.things.update("make", "Kajo");
+
+    expect(car.make).toBe("Kajo");
+    expect(watch.make).toBe("Kajo");
+  });
+
+  test("rejects invalid polymorphic members when constructing an unsaved model", () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        car: model<{ make: string }>(),
+        post: model<Post>(),
+        user: model<User>().extend({
+          things: hasMany(["car", "watch"] as const, { inverse: null }),
+        }),
+        watch: model<{ make: string }>(),
+      },
+    });
+    const post = server.schema.posts.create({ title: "Wrong type" });
+
+    expect(() => server.schema.users.new({ name: "Ada", things: [post] as never })).toThrow(
+      'The "things" relationship does not accept models of type "post".',
+    );
+  });
+
+  test("serializes polymorphic collections returned directly from handlers", async () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        car: model<{ internal: string; make: string }>(),
+        user: model<User>().extend({
+          things: hasMany(["car", "watch"] as const, { inverse: null }),
+        }),
+        watch: model<{ internal: string; make: string }>(),
+      },
+      routes() {
+        this.get(
+          "/users/:id/things",
+          (schema, request) => schema.users.find(request.params.id)?.things,
+        );
+      },
+      seeds(server) {
+        const car = server.schema.cars.create({ internal: "hidden", make: "Volvo" });
+        const watch = server.schema.watches.create({ internal: "hidden", make: "Leijona" });
+        server.schema.users.create({ name: "Ada", things: [car, watch] });
+      },
+      serializers: {
+        application: RestSerializer.extend({
+          attrs: ["id", "make"],
+          keyForAttribute: (attribute) => attribute.toUpperCase(),
+          keyForCollection: (modelName) => `all_${modelName}`,
+        }),
+      },
+    });
+
+    const response = await server.handle(new Request("https://example.test/users/1/things"));
+
+    await expect(response?.json()).resolves.toEqual({
+      all_car: [{ ID: "1", MAKE: "Volvo" }],
+      all_watch: [{ ID: "1", MAKE: "Leijona" }],
+    });
+  });
+
+  test("embeds type discriminators for polymorphic hasMany members", async () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        car: model<{ make: string }>(),
+        user: model<User>().extend({
+          things: hasMany(["car", "watch"] as const, { inverse: null }),
+        }),
+        watch: model<{ make: string }>(),
+      },
+      routes() {
+        this.get("/users/:id", (schema, request) => schema.users.find(request.params.id));
+      },
+      seeds(server) {
+        const car = server.schema.cars.create({ make: "Volvo" });
+        const watch = server.schema.watches.create({ make: "Leijona" });
+        server.schema.users.create({ name: "Ada", things: [car, watch] });
+      },
+      serializers: {
+        user: RestSerializer.extend({ embed: true, include: ["things"] }),
+      },
+    });
+
+    const response = await server.handle(new Request("https://example.test/users/1"));
+
+    await expect(response?.json()).resolves.toEqual({
+      user: {
+        id: "1",
+        name: "Ada",
+        things: [
+          { id: "1", make: "Volvo", type: "car" },
+          { id: "1", make: "Leijona", type: "watch" },
+        ],
+      },
+    });
+  });
 });
