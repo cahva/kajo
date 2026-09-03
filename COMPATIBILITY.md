@@ -127,7 +127,8 @@ These are behavioral inputs, not commitments to preserve Mirage internals.
 ## Prioritized compatibility work
 
 1. Expand the issue-driven regression suite before declaring a stable API.
-2. Define the initial OpenAPI integration around Kajo's typed route and schema
-   sources of truth.
+2. Expand the initial OpenAPI 3.1 route adapter with `$ref` resolution,
+   schema-generated values, and request validation.
 
-OpenAPI integration starts after this compatibility foundation is stable.
+OpenAPI documents can already register deterministic example-backed routes;
+explicit Kajo routes remain the highest-precedence source of behavior.

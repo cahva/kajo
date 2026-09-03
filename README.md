@@ -341,6 +341,45 @@ Missing shorthand records return `404`, malformed shorthand payloads return
 `400`, and custom handlers can throw `new HttpError(status, message)` for
 expected JSON error responses.
 
+### OpenAPI
+
+Kajo can register example-backed routes directly from an OpenAPI 3.1 document.
+Path templates are converted to Kajo parameters, JSON media types are preferred,
+and the first named example is selected deterministically:
+
+```ts
+const server = createServer({
+  openapi: {
+    openapi: "3.1.0",
+    info: { title: "Tasks", version: "1.0.0" },
+    paths: {
+      "/tasks/{taskId}": {
+        get: {
+          responses: {
+            "200": {
+              description: "A task",
+              content: {
+                "application/json": {
+                  example: { id: "1", title: "On the horizon" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  routes() {
+    // Explicit routes are registered later and override generated operations.
+    this.get("/tasks/:taskId", (_schema, request) => loadTask(request.params.taskId));
+  },
+});
+```
+
+The first increment supports inline examples and concrete, `2XX`, or `default`
+success responses. Local and external `$ref` resolution, schema-generated
+values, and request validation are planned next.
+
 Kajo owns same-origin routes by default in browsers. Set `urlPrefix` for an
 external API; requests outside that origin and namespace are ignored
 automatically. Unhandled requests inside the boundary fail loudly unless they

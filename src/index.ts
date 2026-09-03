@@ -85,6 +85,18 @@ export type {
   RequestLogger,
   UnhandledRequestLog,
 } from "./logging.ts";
+export { compileOpenApiRoutes } from "./openapi.ts";
+export type {
+  OpenApiDocument,
+  OpenApiExample,
+  OpenApiMediaType,
+  OpenApiMethod,
+  OpenApiOperation,
+  OpenApiPathItem,
+  OpenApiReference,
+  OpenApiResponse,
+  OpenApiRoute,
+} from "./openapi.ts";
 export { createServer, Server } from "./server.ts";
 export type {
   FactoryRegistry,

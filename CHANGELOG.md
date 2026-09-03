@@ -75,6 +75,8 @@ and this project adheres to
   trailing-slash handling, and deterministic route specificity.
 - A separate headless Chromium suite covering real Fetch and XMLHttpRequest
   interception.
+- Initial OpenAPI 3.1 integration for example-backed operations, path-template
+  conversion, deterministic response selection, and explicit route overrides.
 
 ### Changed
 

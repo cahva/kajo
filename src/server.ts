@@ -42,6 +42,7 @@ import {
   type RequestLogger,
   type UnhandledRequestLog,
 } from "./logging.ts";
+import { compileOpenApiRoutes, type OpenApiDocument } from "./openapi.ts";
 import { Router } from "./router.ts";
 import { serialize, type SerializerRegistry } from "./serializer.ts";
 import {
@@ -117,6 +118,8 @@ export interface ServerOptions<
   readonly identityManagers?: IdentityManagerRegistry<Fixtures, Models>;
   /** Model definitions, keyed by singular model name. */
   readonly models?: Models;
+  /** Register example-backed routes from an OpenAPI 3.1 document. */
+  readonly openapi?: OpenApiDocument;
   /** Initialize additional application data. */
   readonly seeds?: (server: Server<Fixtures, Models>) => void;
   /** Application and per-model response serializers. */
@@ -708,6 +711,17 @@ export class Server<
     this.#boundary.addPassthrough(address, options.methods);
   }
 
+  /**
+   * Register example-backed operations from an OpenAPI 3.1 document.
+   *
+   * Routes registered later with the same method and path take precedence.
+   */
+  loadOpenApi(document: OpenApiDocument): void {
+    for (const route of compileOpenApiRoutes(document)) {
+      this.#register(route.method, route.path, route.response, {});
+    }
+  }
+
   #register(
     method: HttpMethod,
     path: string,
@@ -795,6 +809,9 @@ export function createServer<Fixtures extends DatabaseData = {}, Models extends 
     unhandledRequest: options.unhandledRequest,
     urlPrefix: options.urlPrefix,
   });
+  if (options.openapi) {
+    server.loadOpenApi(options.openapi);
+  }
   options.routes?.call(server);
   options.seeds?.(server);
   return server;
