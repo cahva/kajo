@@ -208,15 +208,21 @@ describe("intercepted request boundaries", () => {
       const server = createServer({
         routes() {
           this.namespace = "/api";
-          this.get("/mocked", { source: "kajo" });
+          this.get("/mocked", (_schema, request) => ({
+            queryParams: request.queryParams,
+            source: "kajo",
+          }));
           this.passthrough();
         },
         urlPrefix: upstream.origin,
       });
       kajoServers.push(server);
 
-      const captured = await fetch(`${upstream.origin}/api/mocked`);
-      await expect(captured.json()).resolves.toEqual({ source: "kajo" });
+      const captured = await fetch(`${upstream.origin}/api/mocked?asjson=true`);
+      await expect(captured.json()).resolves.toEqual({
+        queryParams: { asjson: "true" },
+        source: "kajo",
+      });
 
       const passedThrough = await fetch(`${upstream.origin}/api/unhandled`);
       await expect(passedThrough.text()).resolves.toBe("upstream");

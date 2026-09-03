@@ -102,5 +102,7 @@ and this project adheres to
   bulk updates.
 - Added regression coverage ensuring passthrough leaves request metadata and
   binary request and response bodies unchanged.
+- Added regression coverage ensuring query strings neither bypass registered
+  routes nor disappear from handler request parameters.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD
