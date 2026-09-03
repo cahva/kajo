@@ -38,6 +38,8 @@ and this project adheres to
 - Origin-aware request ownership with browser same-origin defaults, registration
   time `urlPrefix` support, strict unhandled-request diagnostics, and explicit
   method-aware `passthrough()` rules.
+- Typed request diagnostics for handled, passthrough, unhandled, and errored
+  requests, with an optional collapsed browser-console view.
 
 ### Fixed
 

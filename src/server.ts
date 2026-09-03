@@ -21,6 +21,7 @@ import {
   pluralize,
   type Schema,
 } from "./model.ts";
+import { logRequestToConsole, type RequestLog, type RequestLogger } from "./logging.ts";
 import { Router } from "./router.ts";
 import { serialize, type SerializerRegistry } from "./serializer.ts";
 import { createShorthandHandler, type ShorthandMethod } from "./shorthand.ts";
@@ -67,6 +68,8 @@ export interface ServerOptions<
   readonly timing?: number;
   /** Whether to intercept Fetch and XMLHttpRequest traffic. */
   readonly intercept?: boolean;
+  /** Log routed requests to the console or a custom typed logger. */
+  readonly logging?: boolean | RequestLogger;
   /** Behavior for unmatched requests inside Kajo's owned URL boundary. */
   readonly unhandledRequest?: UnhandledRequestPolicy;
   /** Default origin or absolute base URL used by routes. */
@@ -108,6 +111,9 @@ export class Server<
   /** Default response delay in milliseconds. */
   timing: number;
 
+  /** Log routed requests to the console or a custom typed logger. */
+  logging: boolean | RequestLogger;
+
   /** The server's typed in-memory database. */
   readonly db: Database<ServerTables<Fixtures, Models>>;
 
@@ -116,6 +122,7 @@ export class Server<
 
   constructor(options: Omit<ServerOptions<Fixtures, Models>, "routes" | "seeds"> = {}) {
     this.timing = options.timing ?? 0;
+    this.logging = options.logging ?? false;
     this.urlPrefix = options.urlPrefix ?? "";
     this.#unhandledRequest = options.unhandledRequest ?? "error";
     this.#serializers = options.serializers ?? {};
@@ -230,13 +237,38 @@ export class Server<
 
     const response = await this.#dispatch(request, url);
 
-    if (
-      response ||
-      this.#boundary.shouldPassthrough(request.method, url) ||
-      this.#unhandledRequest === "bypass"
-    ) {
+    if (response) {
       return response;
     }
+
+    if (this.#boundary.shouldPassthrough(request.method, url)) {
+      this.#log({
+        method: request.method.toUpperCase(),
+        reason: "rule",
+        request,
+        type: "passthrough",
+        url: request.url,
+      });
+      return undefined;
+    }
+
+    if (this.#unhandledRequest === "bypass") {
+      this.#log({
+        method: request.method.toUpperCase(),
+        reason: "policy",
+        request,
+        type: "passthrough",
+        url: request.url,
+      });
+      return undefined;
+    }
+
+    this.#log({
+      method: request.method.toUpperCase(),
+      request,
+      type: "unhandled",
+      url: request.url,
+    });
 
     throw new Error(
       `Kajo intercepted an unhandled ${request.method.toUpperCase()} request to ${request.url}. ` +
@@ -251,26 +283,64 @@ export class Server<
       return undefined;
     }
 
+    const startedAt = now();
     const routeRequest = await createRouteRequest(request, match.params, url);
     let result: JsonSerializable | JsonValue | Response | undefined;
+    let response: Response;
 
     try {
-      result = await resolveResponder(match.route.responder, routeRequest, this.schema);
-    } catch (error) {
-      if (!(error instanceof HttpError)) {
-        throw error;
+      try {
+        result = await resolveResponder(match.route.responder, routeRequest, this.schema);
+      } catch (error) {
+        if (!(error instanceof HttpError)) {
+          throw error;
+        }
+
+        result = Response.json({ error: error.message }, { status: error.status });
       }
 
-      result = Response.json({ error: error.message }, { status: error.status });
+      const timing = match.route.options.timing ?? this.timing;
+
+      if (timing > 0) {
+        await delay(timing);
+      }
+
+      response = toResponse(result, routeRequest, this.#serializers, match.route.options.status);
+    } catch (error) {
+      this.#log({
+        durationMs: now() - startedAt,
+        error,
+        method: request.method.toUpperCase(),
+        request,
+        route: match.route.path,
+        type: "error",
+        url: request.url,
+      });
+      throw error;
     }
 
-    const timing = match.route.options.timing ?? this.timing;
+    this.#log({
+      durationMs: now() - startedAt,
+      method: request.method.toUpperCase(),
+      request,
+      response,
+      route: match.route.path,
+      type: "handled",
+      url: request.url,
+    });
+    return response;
+  }
 
-    if (timing > 0) {
-      await delay(timing);
+  #log(entry: RequestLog): void {
+    const logger = this.logging === true ? logRequestToConsole : this.logging;
+
+    if (typeof logger === "function") {
+      try {
+        logger(entry);
+      } catch (error) {
+        console.error("[Kajo] Request logger failed.", error);
+      }
     }
-
-    return toResponse(result, routeRequest, this.#serializers, match.route.options.status);
   }
 
   /** Stop this server from handling requests. */
@@ -458,6 +528,7 @@ export function createServer<Fixtures extends DatabaseData = {}, Models extends 
     factories: options.factories,
     fixtures: options.fixtures,
     intercept: options.intercept,
+    logging: options.logging,
     models: options.models,
     serializers: options.serializers,
     timing: options.timing,
@@ -559,4 +630,8 @@ function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, milliseconds);
   });
+}
+
+function now(): number {
+  return globalThis.performance?.now() ?? Date.now();
 }

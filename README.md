@@ -173,6 +173,34 @@ createServer({
 });
 ```
 
+Enable request diagnostics with `logging: true`. Handled requests are shown in
+collapsed console groups with their status, matched route, duration, request,
+and response. Passthrough, unhandled, and errored requests are identified
+separately:
+
+```ts
+const server = createServer({
+  logging: true,
+  // ...
+});
+
+// Logging can also be toggled while debugging.
+server.logging = false;
+```
+
+For test assertions or integration with another logging tool, pass a typed
+callback instead:
+
+```ts
+createServer({
+  logging(entry) {
+    if (entry.type === "handled") {
+      console.log(entry.method, entry.route, entry.response.status, entry.durationMs);
+    }
+  },
+});
+```
+
 Factories generate realistic model data with sequences, dependent attributes,
 traits, and final overrides:
 

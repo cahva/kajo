@@ -61,6 +61,8 @@ export const server = createServer({
     }),
   },
 
+  logging: true,
+
   models,
 
   serializers: {

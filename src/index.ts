@@ -55,6 +55,16 @@ export type {
   RelationshipRegistry,
   Schema,
 } from "./model.ts";
+export { logRequestToConsole } from "./logging.ts";
+export type {
+  ErroredRequestLog,
+  HandledRequestLog,
+  PassthroughRequestLog,
+  RequestLog,
+  RequestLogBase,
+  RequestLogger,
+  UnhandledRequestLog,
+} from "./logging.ts";
 export { createServer, Server } from "./server.ts";
 export type {
   FactoryRegistry,

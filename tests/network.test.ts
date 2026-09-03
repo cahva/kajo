@@ -1,7 +1,7 @@
 import { createServer as createHttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
-import { createServer } from "../src/index.ts";
+import { createServer, type RequestLog } from "../src/index.ts";
 
 const kajoServers: { shutdown(): void }[] = [];
 
@@ -89,7 +89,9 @@ describe("request ownership", () => {
 describe("intercepted request boundaries", () => {
   test("errors for unhandled owned requests but ignores other origins", async () => {
     const upstream = await startUpstream("outside kajo");
+    const entries: RequestLog[] = [];
     const server = createServer({
+      logging: (entry) => entries.push(entry),
       routes() {
         this.namespace = "/api";
         this.get("/tasks", []);
@@ -106,6 +108,13 @@ describe("intercepted request boundaries", () => {
             "Register a route or add an explicit passthrough rule.",
         },
       });
+      expect(entries).toMatchObject([
+        {
+          method: "GET",
+          type: "unhandled",
+          url: "https://owned.example.test/api/missing",
+        },
+      ]);
 
       const outside = await fetch(`${upstream.origin}/outside`);
       await expect(outside.text()).resolves.toBe("outside kajo");
@@ -116,9 +125,11 @@ describe("intercepted request boundaries", () => {
 
   test("passes matching rules through to the real network", async () => {
     const upstream = await startUpstream("upstream");
+    const entries: RequestLog[] = [];
 
     try {
       const server = createServer({
+        logging: (entry) => entries.push(entry),
         routes() {
           this.namespace = "/api";
           this.get("/mocked", { source: "kajo" });
@@ -136,6 +147,10 @@ describe("intercepted request boundaries", () => {
 
       const captured = await fetch(`${upstream.origin}/api/real`, { method: "POST" });
       await expect(captured.json()).resolves.toEqual({ source: "kajo" });
+      expect(entries).toMatchObject([
+        { method: "GET", reason: "rule", type: "passthrough" },
+        { method: "POST", route: "/api/real", type: "handled" },
+      ]);
     } finally {
       await upstream.close();
     }
