@@ -629,6 +629,134 @@ describe("OpenAPI", () => {
     });
   });
 
+  test("enforces request contracts on shorthand routes", async () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        task: model<{ title: string }>(),
+      },
+    });
+    server.post("/tasks", "tasks", {
+      openapi: {
+        operationId: "createTask",
+        requestBody: z.object({ title: z.string().min(1) }),
+        responses: { "201": { description: "Created task" } },
+      },
+    });
+
+    const response = await server.handle(
+      new Request("https://example.test/tasks", {
+        body: JSON.stringify({ title: "" }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+
+    expect(response?.status).toBe(400);
+    expect(server.db.tasks.length).toBe(0);
+  });
+
+  test("recognizes an OpenAPI-only second argument as GET shorthand options", async () => {
+    const server = createServer({
+      intercept: false,
+      models: {
+        task: model<{ title: string }>(),
+      },
+      seeds(server) {
+        server.schema.tasks.create({ title: "Contracted shorthand" });
+      },
+    });
+    server.get("/tasks", {
+      openapi: {
+        operationId: "listTasks",
+        responses: { "200": { description: "Tasks" } },
+      },
+    });
+
+    const response = await server.handle(new Request("https://example.test/tasks"));
+    const exported = server.openApiDocument({ title: "Tasks", version: "1.0.0" });
+
+    await expect(response?.json()).resolves.toEqual({
+      tasks: [{ id: "1", title: "Contracted shorthand" }],
+    });
+    expect((exported.paths["/tasks"] as OpenApiPathItem).get?.operationId).toBe("listTasks");
+  });
+
+  test("completes and validates exported path parameters", () => {
+    const server = createServer({
+      intercept: false,
+      routes() {
+        this.get("/tasks/:taskId", () => null, {
+          openapi: {
+            operationId: "getTask",
+            responses: { "200": { description: "Task" } },
+          },
+        });
+      },
+    });
+    const exported = server.openApiDocument({ title: "Tasks", version: "1.0.0" });
+    const operation = (exported.paths["/tasks/{taskId}"] as OpenApiPathItem).get;
+
+    expect(operation?.parameters).toEqual([
+      {
+        in: "path",
+        name: "taskId",
+        required: true,
+        schema: { type: "string" },
+      },
+    ]);
+    expect(() =>
+      createServer({
+        intercept: false,
+        routes() {
+          this.get("/tasks", () => null, {
+            openapi: {
+              operationId: "getTask",
+              parameters: [
+                {
+                  in: "path",
+                  name: "taskId",
+                  required: true,
+                },
+              ],
+              responses: { "200": { description: "Task" } },
+            },
+          });
+        },
+      }),
+    ).toThrow('OpenAPI route contract path parameter "taskId" does not exist in route "/tasks".');
+  });
+
+  test("compiles TRACE operations and keeps generated HEAD responses bodyless", async () => {
+    const routes = compileOpenApiRoutes({
+      openapi: "3.1.0",
+      paths: {
+        "/audit": {
+          head: {
+            operationId: "headAudit",
+            responses: {
+              "200": {
+                content: {
+                  "application/json": { example: { ok: true } },
+                },
+                description: "Audit headers",
+              },
+            },
+          },
+          trace: {
+            operationId: "traceAudit",
+            responses: { "204": { description: "Trace" } },
+          },
+        },
+      },
+    });
+    const head = routes.find(({ method }) => method === "HEAD")?.response;
+
+    expect(routes.map(({ method }) => method).sort()).toEqual(["HEAD", "TRACE"]);
+    expect(head?.headers.get("content-type")).toBe("application/json");
+    await expect(head?.text()).resolves.toBe("");
+  });
+
   test("supports loading additional documents after construction", async () => {
     const server = createServer({ intercept: false });
 

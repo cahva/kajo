@@ -25,7 +25,7 @@ supported APIs may still change; the changelog documents every change.
 | Mirage capability                      | Kajo status     | Notes                                                                                              |
 | -------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------- |
 | `createServer()` and `Server`          | **Supported**   | Typed fixtures, models, factories, serializers, routes, and seeds.                                 |
-| HTTP verb route helpers                | **Supported**   | `get`, `post`, `put`, `patch`, `delete`/`del`, `head`, and `options`.                              |
+| HTTP verb route helpers                | **Supported**   | `get`, `post`, `put`, `patch`, `delete`/`del`, `head`, `options`, and `trace`.                     |
 | Static, function, and async handlers   | **Supported**   | Handlers may return JSON values, models, collections, or native responses.                         |
 | Dynamic `:params` and query parameters | **Supported**   | Available through the typed `KajoRequest`.                                                         |
 | Wildcard route segments                | **Supported**   | A final `*name` captures one or more decoded path segments.                                        |

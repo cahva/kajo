@@ -133,5 +133,9 @@ and this project adheres to
   to a client-intercepted endpoint.
 - Allowed imported operations without a `2xx` response to use their lowest
   documented concrete response as a generated fallback.
+- Preserved OpenAPI validation options on shorthand routes and recognized
+  responder-less GET contracts without requiring `coalesce`.
+- Completed required OpenAPI path parameters automatically, supported `TRACE`,
+  and kept generated `HEAD` responses bodyless.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD

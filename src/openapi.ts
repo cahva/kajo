@@ -1,7 +1,16 @@
 import type { KajoRequest } from "./http.ts";
 import type { KajoSchema } from "./standard-schema.ts";
 
-const OPENAPI_METHODS = ["delete", "get", "head", "options", "patch", "post", "put"] as const;
+const OPENAPI_METHODS = [
+  "delete",
+  "get",
+  "head",
+  "options",
+  "patch",
+  "post",
+  "put",
+  "trace",
+] as const;
 const STANDARD_JSON_SCHEMAS = {
   input: new WeakMap<KajoSchema, OpenApiSchema>(),
   output: new WeakMap<KajoSchema, OpenApiSchema>(),
@@ -30,6 +39,7 @@ export interface OpenApiPathItem {
   readonly patch?: OpenApiOperation;
   readonly post?: OpenApiOperation;
   readonly put?: OpenApiOperation;
+  readonly trace?: OpenApiOperation;
   readonly [key: string]: unknown;
 }
 
@@ -282,7 +292,7 @@ export function compileOpenApiRoutes(document: OpenApiDocument): OpenApiRoute[] 
         operation: normalizeOperation(operation),
         operationId,
         path,
-        response: exampleResponse(operation, identity, references),
+        response: exampleResponse(operation, identity, references, routeMethod),
         source: "openapi",
       });
     }
@@ -296,19 +306,53 @@ export function compileOpenApiRouteContract(
   path: string,
   contract: OpenApiRouteContract,
 ): OpenApiRoute {
-  assertSupportedRequestContract(contract, path);
+  const completeContract = completePathParameters(contract, path);
+  assertSupportedRequestContract(completeContract, path);
   const openApiPath = toOpenApiPath(path);
   const methodName = method.toLowerCase() as (typeof OPENAPI_METHODS)[number];
   const routes = compileOpenApiRoutes({
     openapi: "3.1.0",
     paths: {
       [openApiPath]: {
-        [methodName]: contract,
+        [methodName]: completeContract,
       },
     },
   });
 
   return { ...routes[0]!, source: "kajo" };
+}
+
+function completePathParameters(
+  contract: OpenApiRouteContract,
+  path: string,
+): OpenApiRouteContract {
+  const names = path
+    .split("/")
+    .filter((segment) => segment.startsWith(":"))
+    .map((segment) => segment.slice(1));
+  const parameters = [...(contract.parameters ?? [])];
+
+  for (const name of names) {
+    const declared = parameters.find(
+      (parameter) => !isReference(parameter) && parameter.in === "path" && parameter.name === name,
+    );
+
+    if (!declared) {
+      parameters.push({
+        in: "path",
+        name,
+        required: true,
+        schema: { type: "string" },
+      });
+    }
+  }
+
+  return names.length > 0 || contract.parameters
+    ? {
+        ...contract,
+        parameters,
+      }
+    : contract;
 }
 
 function assertSupportedRequestContract(contract: OpenApiRouteContract, path: string): void {
@@ -333,6 +377,15 @@ function assertSupportedRequestContract(contract: OpenApiRouteContract, path: st
     if (parameter.in === "path" && parameter.required !== true) {
       throw new TypeError(
         `OpenAPI route contract path parameter "${parameter.name}" must be required.`,
+      );
+    }
+
+    if (
+      parameter.in === "path" &&
+      !path.split("/").some((segment) => segment === `:${parameter.name}`)
+    ) {
+      throw new TypeError(
+        `OpenAPI route contract path parameter "${parameter.name}" does not exist in route "${path}".`,
       );
     }
   }
@@ -718,6 +771,7 @@ function exampleResponse(
   operation: OpenApiOperation,
   identity: string,
   references: LocalReferenceResolver,
+  method: OpenApiMethod,
 ): Response {
   if (!operation.responses || typeof operation.responses !== "object") {
     throw new TypeError(
@@ -738,9 +792,19 @@ function exampleResponse(
     `response for "${operation.operationId ?? identity}"`,
   ) as OpenApiResponse;
   const media = selectMediaType(response.content);
-  const body = media
-    ? selectExample(media.value, operation.operationId ?? identity, references)
-    : undefined;
+  const body =
+    method === "HEAD"
+      ? undefined
+      : media
+        ? selectExample(media.value, operation.operationId ?? identity, references)
+        : undefined;
+
+  if (method === "HEAD") {
+    return new Response(null, {
+      headers: media ? { "content-type": media.type } : undefined,
+      status: selected.status,
+    });
+  }
 
   if (selected.status === 204 || body === undefined) {
     return new Response(null, { status: selected.status });

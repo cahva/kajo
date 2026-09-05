@@ -60,7 +60,7 @@ import {
   type ShorthandMethod,
 } from "./shorthand.ts";
 
-const HTTP_METHODS = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"] as const;
+const HTTP_METHODS = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "TRACE"] as const;
 
 type HttpMethod = (typeof HTTP_METHODS)[number];
 
@@ -698,6 +698,14 @@ export class Server<
     this.#register("PUT", path, responder, options);
   }
 
+  trace(
+    path: string,
+    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
+    options: RouteOptions = {},
+  ): void {
+    this.#register("TRACE", path, responder, options);
+  }
+
   /**
    * Register conventional index, show, create, update, and delete routes for a
    * schema collection.
@@ -808,6 +816,7 @@ export class Server<
         { coalesce: options.coalesce },
       );
       const routeOptions: RouteOptions = {
+        openapi: options.openapi,
         status: options.status ?? (method === "POST" ? 201 : 200),
         timing: options.timing,
       };
@@ -847,11 +856,30 @@ function isShorthandMethod(method: HttpMethod): method is ShorthandMethod {
 }
 
 function isGetRouteOptions(value: unknown): value is GetRouteOptions {
+  if (typeof value !== "object" || value === null || value instanceof Response) {
+    return false;
+  }
+
+  const entries = Object.entries(value);
   return (
-    typeof value === "object" &&
-    value !== null &&
-    !(value instanceof Response) &&
-    Object.prototype.hasOwnProperty.call(value, "coalesce")
+    entries.length > 0 &&
+    entries.every(([key, option]) => {
+      switch (key) {
+        case "coalesce": {
+          return typeof option === "boolean";
+        }
+        case "openapi": {
+          return typeof option === "object" && option !== null;
+        }
+        case "status":
+        case "timing": {
+          return typeof option === "number";
+        }
+        default: {
+          return false;
+        }
+      }
+    })
   );
 }
 
