@@ -6,27 +6,33 @@ import {
   createServer,
   Factory,
   hasMany,
+  HttpError,
   model,
   Serializer,
   trait,
 } from "../../../src/index.ts";
+import type {
+  CreateTaskRequest,
+  SchemaName,
+  Task,
+  TaskBoardSchemas,
+  UpdateTaskRequest,
+  User,
+} from "./schemas/types.ts";
 
-export type TaskStatus = "backlog" | "in-progress" | "done";
+const schemaLoaders = {
+  arktype: () => import("./schemas/arktype.ts"),
+  valibot: () => import("./schemas/valibot.ts"),
+  zod: () => import("./schemas/zod.ts"),
+} satisfies Record<SchemaName, () => Promise<{ schemas: TaskBoardSchemas }>>;
 
-interface Task {
-  status: TaskStatus;
-  title: string;
-}
-
-interface User {
-  name: string;
-}
-
+export const schemaName = selectedSchema();
+const { schemas } = await schemaLoaders[schemaName]();
 const models = {
-  task: model<Task>().extend({
+  task: model(schemas.task).extend({
     assignee: belongsTo("user"),
   }),
-  user: model<User>().extend({
+  user: model(schemas.user).extend({
     tasks: hasMany("task"),
   }),
 };
@@ -76,22 +82,147 @@ export const server = createServer({
   routes() {
     this.namespace = "/api";
 
-    this.resource("tasks", {
-      only: ["index", "create", "update", "delete"],
+    this.get("/tasks", "tasks", {
+      openapi: {
+        operationId: "listTasks",
+        responses: {
+          "200": {
+            content: {
+              "application/json": {
+                schema: schemas.tasksResponse,
+              },
+            },
+            description: "Task board",
+          },
+        },
+      },
     });
 
-    this.get("/summary", (schema) => {
-      const tasks = schema.tasks.all().models;
+    this.post(
+      "/tasks",
+      (schema, request) => {
+        const { task } = request.validated.body as CreateTaskRequest;
+        return schema.tasks.create(task);
+      },
+      {
+        status: 201,
+        openapi: {
+          operationId: "createTask",
+          requestBody: schemas.createTaskRequest,
+          responses: {
+            "201": {
+              content: {
+                "application/json": {
+                  schema: schemas.taskResponse,
+                },
+              },
+              description: "Created task",
+            },
+          },
+        },
+      },
+    );
 
-      return {
-        done: tasks.filter((task) => task.status === "done").length,
-        open: tasks.filter((task) => task.status !== "done").length,
-        total: tasks.length,
-      };
+    this.patch(
+      "/tasks/:id",
+      (schema, request) => {
+        const task = schema.tasks.find(request.validated.parameters.path.id as string);
+
+        if (!task) {
+          throw new HttpError(404, `Task "${request.params.id}" was not found.`);
+        }
+
+        return task.update((request.validated.body as UpdateTaskRequest).task);
+      },
+      {
+        openapi: {
+          operationId: "updateTask",
+          parameters: [
+            {
+              in: "path",
+              name: "id",
+              required: true,
+              schema: schemas.id,
+            },
+          ],
+          requestBody: schemas.updateTaskRequest,
+          responses: {
+            "200": {
+              content: {
+                "application/json": {
+                  schema: schemas.taskResponse,
+                },
+              },
+              description: "Updated task",
+            },
+          },
+        },
+      },
+    );
+
+    this.delete("/tasks/:id", "tasks", {
+      status: 204,
+      openapi: {
+        operationId: "deleteTask",
+        parameters: [
+          {
+            in: "path",
+            name: "id",
+            required: true,
+            schema: schemas.id,
+          },
+        ],
+        responses: {
+          "204": { description: "Deleted task" },
+        },
+      },
     });
+
+    this.get(
+      "/summary",
+      (schema) => {
+        const tasks = schema.tasks.all().models;
+
+        return {
+          done: tasks.filter((task) => task.status === "done").length,
+          open: tasks.filter((task) => task.status !== "done").length,
+          total: tasks.length,
+        };
+      },
+      {
+        openapi: {
+          operationId: "getTaskSummary",
+          responses: {
+            "200": {
+              content: {
+                "application/json": {
+                  schema: schemas.summary,
+                },
+              },
+              description: "Task counts by completion state",
+            },
+          },
+        },
+      },
+    );
   },
 });
 
+server.get("/openapi.json", () =>
+  Response.json(
+    server.openApiDocument({
+      description: `Generated from the ${schemaName} task-board contracts.`,
+      title: "Kajo task board",
+      version: "1.0.0",
+    }),
+  ),
+);
+
 if (import.meta.hot) {
   import.meta.hot.dispose(() => server.shutdown());
+}
+
+function selectedSchema(): SchemaName {
+  const selected = new URL(window.location.href).searchParams.get("schema");
+  return selected === "arktype" || selected === "valibot" || selected === "zod" ? selected : "zod";
 }

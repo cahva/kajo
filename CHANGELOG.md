@@ -82,6 +82,22 @@ and this project adheres to
 - Deterministic JSON Schema response generation for OpenAPI operations without
   examples, covering `const`, `default`, `enum`, composition keywords, string
   formats, and typed placeholder synthesis.
+- Schema-backed model definitions using the Standard JSON Schema interface,
+  including inferred persisted attributes and retained runtime metadata.
+- Interchangeable Zod, Valibot, and ArkType implementations in the task-board
+  example using one frontend and Kajo server configuration.
+- OpenAPI operation registries and `operationId` handlers that connect imported
+  contracts to seeded Kajo data while retaining generated fallbacks.
+- OpenAPI contracts on Kajo-defined routes and combined document export, with
+  Standard Schema responses converted to JSON Schema.
+- Standard Schema request-body and parameter contracts with transformed handler
+  values and structured `400` validation responses.
+- Request validation and generated OpenAPI document inspection in every
+  task-board schema implementation.
+- Complete OpenAPI coverage for every application endpoint used by the
+  task-board frontend.
+- Compatibility coverage for all 20 operations in ReadMe's OpenAPI 3.1
+  Petstore document.
 
 ### Changed
 
@@ -111,5 +127,22 @@ and this project adheres to
   binary request and response bodies unchanged.
 - Added regression coverage ensuring query strings neither bypass registered
   routes nor disappear from handler request parameters.
+- Recognized callable Standard Schema implementations such as ArkType in
+  OpenAPI request and response contracts.
+- Downloaded the task-board OpenAPI export through Fetch instead of navigating
+  to a client-intercepted endpoint.
+- Allowed imported operations without a `2xx` response to use their lowest
+  documented concrete response as a generated fallback.
+- Preserved OpenAPI validation options on shorthand routes and recognized
+  responder-less GET contracts without requiring `coalesce`.
+- Completed required OpenAPI path parameters automatically, supported `TRACE`,
+  and kept generated `HEAD` responses bodyless.
+- Matched request media types case-insensitively with wildcard precedence and
+  deserialized supported OpenAPI object parameter styles.
+- Preserved root-relative references in embedded Standard JSON Schemas by
+  assigning each converted schema its own deterministic resource ID.
+- Generated response examples that honor string lengths, numeric bounds and
+  multiples, integer types, and array lengths, while requiring explicit
+  examples for unsupported constraints.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD

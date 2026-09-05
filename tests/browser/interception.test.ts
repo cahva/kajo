@@ -1,6 +1,7 @@
 /// <reference lib="dom" />
 
 import { expect, test } from "vite-plus/test";
+import * as z from "zod";
 import { createServer } from "../../src/index.ts";
 
 test("intercepts Fetch and XMLHttpRequest in a real browser", async () => {
@@ -15,6 +16,17 @@ test("intercepts Fetch and XMLHttpRequest in a real browser", async () => {
         body: JSON.parse(request.requestBody),
         transport: "xhr",
       }));
+      this.post("/validated", (_schema, request) => Response.json(request.validated.body), {
+        openapi: {
+          operationId: "validateBrowserRequest",
+          requestBody: z.object({
+            count: z.coerce.number().int().positive(),
+          }),
+          responses: {
+            "200": { description: "Validated body" },
+          },
+        },
+      });
     },
   });
 
@@ -32,6 +44,24 @@ test("intercepts Fetch and XMLHttpRequest in a real browser", async () => {
     expect(JSON.parse(xhrResponse.body)).toEqual({
       body: { status: "done" },
       transport: "xhr",
+    });
+
+    const valid = await fetch("/api/validated", {
+      body: JSON.stringify({ count: "2" }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+    await expect(valid.json()).resolves.toEqual({ count: 2 });
+
+    const invalid = await fetch("/api/validated", {
+      body: JSON.stringify({ count: 0 }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+    expect(invalid.status).toBe(400);
+    await expect(invalid.json()).resolves.toMatchObject({
+      error: "OpenAPI request validation failed.",
+      operationId: "validateBrowserRequest",
     });
   } finally {
     server.shutdown();

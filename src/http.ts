@@ -1,5 +1,6 @@
 import type { DatabaseData } from "./database.ts";
 import type { ModelRegistry, Schema } from "./model.ts";
+import type { OpenApiRouteContract, OpenApiValidatedRequest } from "./openapi.ts";
 
 /**
  * An expected HTTP failure that route handlers can return by throwing.
@@ -45,6 +46,8 @@ export interface KajoRequest {
   readonly queryParams: Readonly<Record<string, string>>;
   /** The request body as text. */
   readonly requestBody: string;
+  /** Values validated and transformed by this route's Standard Schema contracts. */
+  readonly validated: OpenApiValidatedRequest;
 }
 
 /**
@@ -83,4 +86,6 @@ export interface RouteOptions {
   readonly timing?: number;
   /** Override the response status. */
   readonly status?: number;
+  /** Describe this route for OpenAPI export. */
+  readonly openapi?: OpenApiRouteContract;
 }

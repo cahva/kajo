@@ -4,6 +4,7 @@
  * @module
  */
 
+export type { StandardJSONSchemaV1, StandardSchemaV1 } from "@standard-schema/spec";
 export { createDatabase, IdentityManager } from "./database.ts";
 export type {
   Database,
@@ -89,20 +90,28 @@ export { compileOpenApiRoutes } from "./openapi.ts";
 export type {
   OpenApiDocument,
   OpenApiExample,
+  OpenApiInfo,
   OpenApiMediaType,
   OpenApiMethod,
   OpenApiOperation,
+  OpenApiParameter,
   OpenApiPathItem,
   OpenApiReference,
+  OpenApiRequestBody,
   OpenApiResponse,
   OpenApiRoute,
+  OpenApiRouteContract,
   OpenApiSchema,
+  OpenApiValidatedRequest,
+  OpenApiValidationIssue,
+  OpenApiValidationResult,
 } from "./openapi.ts";
 export { createServer, Server } from "./server.ts";
 export type {
   FactoryRegistry,
   GetRouteOptions,
   IdentityManagerRegistry,
+  OpenApiHandlerRegistry,
   PassthroughOptions,
   ResourceAction,
   ResourceOptions,
@@ -118,3 +127,4 @@ export type {
   SerializerOptions,
   SerializerRegistry,
 } from "./serializer.ts";
+export type { InferSchemaInput, InferSchemaOutput, KajoSchema } from "./standard-schema.ts";

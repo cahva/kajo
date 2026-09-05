@@ -183,6 +183,29 @@ const models = {
 };
 ```
 
+Models can also infer their attributes from any
+[Standard JSON Schema](https://standardschema.dev/json-schema)-compatible
+schema. Kajo does not depend on the schema library:
+
+```ts
+import { z } from "zod";
+
+const Task = z.object({
+  completed: z.boolean().default(false),
+  title: z.string().min(1),
+});
+
+const models = {
+  task: model(Task),
+};
+```
+
+The schema remains available on the model definition for validation and future
+OpenAPI generation. Zod, ArkType, Valibot's Standard JSON Schema adapter, and
+other compatible implementations use the same Kajo API. The existing
+`model<Task>()` form remains available when runtime schema metadata is not
+needed.
+
 Kajo infers the inverse when there is exactly one match. Use
 `{ inverse: "relationshipName" }` to disambiguate, or `{ inverse: null }` for
 an association without an inverse.
@@ -381,19 +404,127 @@ const server = createServer({
 });
 ```
 
+Imported operations can use Kajo's database and schema through handlers keyed
+by `operationId`. Operations without a handler continue using their example or
+generated schema value:
+
+```ts
+createServer({
+  openapi: document,
+  models: {
+    task: model(TaskSchema),
+  },
+  fixtures: {
+    tasks: [{ id: "1", title: "On the horizon" }],
+  },
+  openapiHandlers: {
+    listTasks: (schema) => schema.tasks.all(),
+    getTask: (schema, request) => schema.tasks.find(request.params.taskId),
+  },
+});
+```
+
+Handler names must match an operation in the document. Duplicate operation IDs
+and duplicate method/path registrations fail when the document is loaded.
+Explicit routes declared in `routes()` are registered later and retain highest
+precedence.
+
+Kajo-defined routes can carry an OpenAPI contract. Standard Schema response
+schemas are converted to JSON Schema when the document is exported:
+
+```ts
+this.get("/tasks/:taskId", getTask, {
+  openapi: {
+    operationId: "getTask",
+    responses: {
+      "200": {
+        description: "A task",
+        content: {
+          "application/json": {
+            schema: TaskSchema,
+          },
+        },
+      },
+    },
+  },
+});
+
+const document = server.openApiDocument({
+  title: "Task API",
+  version: "1.0.0",
+});
+```
+
+Namespaces and path parameters are reflected in the exported path. A contracted
+Kajo route replaces an imported operation at the same method and path, matching
+runtime route precedence. Export currently supports one imported base document
+plus any number of Kajo-defined contracts.
+
+Standard Schema request bodies validate and transform input before the route
+handler runs. Passing a schema directly declares a required JSON body:
+
+```ts
+const CreateTask = z.object({
+  priority: z.coerce.number().int().positive(),
+  title: z.string().min(1),
+});
+
+this.post(
+  "/tasks",
+  (_schema, request) => {
+    return Response.json({ received: request.validated.body });
+  },
+  {
+    openapi: {
+      operationId: "createTask",
+      requestBody: CreateTask,
+      responses: {
+        "201": { description: "Created task" },
+      },
+    },
+  },
+);
+```
+
+Contract parameters can use Standard Schemas in `path`, `query`, `header`, and
+`cookie`. Validated and transformed values are available under
+`request.validated.parameters`. Query arrays support repeated values by default
+and comma-separated values with `explode: false`. Object parameters support
+exploded query/cookie properties and comma-separated simple or form values.
+Request content matching is case-insensitive and honors exact media types,
+`type/*`, and `*/*`, preferring the most specific declaration. Invalid requests
+receive a structured `400` response with the operation ID and validation
+issues; the handler is not called.
+
+Plain JSON Schemas in imported OpenAPI documents are not validated yet. They
+will use a separate JSON Schema engine so Kajo-defined contracts can continue
+using the developer's chosen Standard Schema implementation.
+
+Kajo's compatibility suite compiles all 20 operations in ReadMe's unmodified
+OpenAPI 3.1 Petstore document. Documents with a `servers` base currently pass
+that URL through `urlPrefix`; automatic server selection, security enforcement,
+and imported JSON Schema validation remain future work. Operations without a
+`2xx` response use their lowest documented concrete status as the generated
+fallback, while an `operationId` handler can provide application behavior.
+
 Operations without examples generate a deterministic body from the response
 JSON Schema. Each schema node uses `example`, `examples`, `const`, `default`,
 or `enum` when present, merges `allOf`, picks the first `oneOf` or `anyOf`
 branch, and otherwise synthesizes a placeholder from `type`: `"string"` or a
-fixed constant for known string formats, the `minimum` or `0` for numbers,
-`true` for booleans, one generated `items` element for arrays, and every
-declared property for objects. Unconstrained schemas produce `{}`, and
-recursive schemas require an explicit example.
+fixed constant for known string formats, a valid bounded/multiple value for
+numbers, `true` for booleans, the minimum number of generated `items` for
+arrays, and every declared property for objects. String lengths, numeric
+bounds, `multipleOf`, and array lengths are respected. Constraints that cannot
+be synthesized safely, such as `pattern` or multi-item `uniqueItems`, require
+an explicit example rather than producing a value that contradicts the schema.
+Unconstrained schemas produce `{}`, and recursive schemas require an explicit
+example.
 
-The first increment supports inline examples, locally referenced examples, and
-schema-generated values with concrete, `2XX`, or `default` success responses.
-Local JSON Pointer references can target path items, responses, examples, and
-schemas. External `$ref` resolution and request validation are planned next.
+The OpenAPI integration supports inline examples, locally referenced examples,
+schema-generated values, operation handlers, route-contract export, and
+Standard Schema request validation. Local JSON Pointer references can target
+path items, responses, examples, and schemas. External `$ref` resolution and
+validation of imported plain JSON Schemas are planned next.
 
 Kajo owns same-origin routes by default in browsers. Set `urlPrefix` for an
 external API; requests outside that origin and namespace are ignored
@@ -539,7 +670,11 @@ supported behavior, intentional differences, and the remaining work.
 ## Examples
 
 Runnable examples live in [`examples`](./examples). The vanilla TypeScript task
-board exercises Kajo through real browser requests:
+board exercises Kajo through real browser requests and can switch between Zod,
+Valibot, and ArkType model schemas without changing its frontend or server
+behavior. Its create and update routes validate requests with the selected
+library, and the **OpenAPI ↓** action downloads the five-operation contract
+used by the frontend:
 
 ```bash
 vp install

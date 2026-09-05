@@ -42,7 +42,15 @@ import {
   type RequestLogger,
   type UnhandledRequestLog,
 } from "./logging.ts";
-import { compileOpenApiRoutes, type OpenApiDocument } from "./openapi.ts";
+import {
+  compileOpenApiRouteContract,
+  compileOpenApiRoutes,
+  type OpenApiDocument,
+  type OpenApiInfo,
+  OpenApiOperationRegistry,
+  type OpenApiRoute,
+  validateOpenApiRequest,
+} from "./openapi.ts";
 import { Router } from "./router.ts";
 import { serialize, type SerializerRegistry } from "./serializer.ts";
 import {
@@ -52,7 +60,7 @@ import {
   type ShorthandMethod,
 } from "./shorthand.ts";
 
-const HTTP_METHODS = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"] as const;
+const HTTP_METHODS = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "TRACE"] as const;
 
 type HttpMethod = (typeof HTTP_METHODS)[number];
 
@@ -92,6 +100,11 @@ export type IdentityManagerRegistry<Fixtures extends DatabaseData, Models extend
   readonly [Name in (keyof Fixtures | keyof Models) & string]?: IdentityManagerConstructor;
 };
 
+export type OpenApiHandlerRegistry<
+  Fixtures extends DatabaseData,
+  Models extends ModelRegistry,
+> = Readonly<Record<string, RouteHandler<ServerTables<Fixtures, Models>, Models> | undefined>>;
+
 export interface ServerOptions<
   Fixtures extends DatabaseData = DatabaseData,
   Models extends ModelRegistry = {},
@@ -120,6 +133,8 @@ export interface ServerOptions<
   readonly models?: Models;
   /** Register example-backed routes from an OpenAPI 3.1 document. */
   readonly openapi?: OpenApiDocument;
+  /** Override imported OpenAPI operations by their operationId. */
+  readonly openapiHandlers?: OpenApiHandlerRegistry<Fixtures, Models>;
   /** Initialize additional application data. */
   readonly seeds?: (server: Server<Fixtures, Models>) => void;
   /** Application and per-model response serializers. */
@@ -139,6 +154,7 @@ export class Server<
   readonly #factories: FactoryRegistry<Models>;
   readonly #fixtures: Fixtures;
   readonly #models: Models;
+  readonly #openApiOperations = new OpenApiOperationRegistry();
   readonly #factorySequences = new Map<string, number>();
   readonly #factoryStack: string[] = [];
   readonly #requestHistory: RequestLog[] = [];
@@ -505,13 +521,30 @@ export class Server<
     }
 
     const startedAt = now();
-    const routeRequest = await createRouteRequest(request, match.params, url);
+    let routeRequest = await createRouteRequest(request, match.params, url);
     let result: JsonSerializable | JsonValue | Response | undefined;
     let response: Response;
 
     try {
       try {
-        result = await resolveResponder(match.route.responder, routeRequest, this.schema);
+        const contract = match.route.options.openapi;
+        const validation = contract
+          ? await validateOpenApiRequest(contract, routeRequest)
+          : { value: routeRequest.validated };
+
+        if ("issues" in validation) {
+          result = Response.json(
+            {
+              error: "OpenAPI request validation failed.",
+              issues: validation.issues,
+              operationId: contract?.operationId,
+            },
+            { status: 400 },
+          );
+        } else {
+          routeRequest = { ...routeRequest, validated: validation.value };
+          result = await resolveResponder(match.route.responder, routeRequest, this.schema);
+        }
       } catch (error) {
         if (!(error instanceof HttpError)) {
           throw error;
@@ -665,6 +698,14 @@ export class Server<
     this.#register("PUT", path, responder, options);
   }
 
+  trace(
+    path: string,
+    responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
+    options: RouteOptions = {},
+  ): void {
+    this.#register("TRACE", path, responder, options);
+  }
+
   /**
    * Register conventional index, show, create, update, and delete routes for a
    * schema collection.
@@ -716,10 +757,36 @@ export class Server<
    *
    * Routes registered later with the same method and path take precedence.
    */
-  loadOpenApi(document: OpenApiDocument): void {
-    for (const route of compileOpenApiRoutes(document)) {
-      this.#register(route.method, route.path, route.response, {});
+  loadOpenApi(
+    document: OpenApiDocument,
+    handlers: OpenApiHandlerRegistry<Fixtures, Models> = {},
+  ): void {
+    const routes = compileOpenApiRoutes(document);
+    const operationIds = new Set(routes.map(({ operationId }) => operationId));
+
+    for (const operationId of Object.keys(handlers)) {
+      if (!operationIds.has(operationId)) {
+        throw new TypeError(`No OpenAPI operation with operationId "${operationId}" was found.`);
+      }
     }
+
+    this.#openApiOperations.register(routes, { document });
+
+    for (const route of routes) {
+      this.#registerOpenApiRoute(route, handlers[route.operationId]);
+    }
+  }
+
+  /** Export imported and Kajo-defined operation contracts as OpenAPI 3.1. */
+  openApiDocument(info?: OpenApiInfo): OpenApiDocument {
+    return this.#openApiOperations.document(info);
+  }
+
+  #registerOpenApiRoute(
+    route: OpenApiRoute,
+    handler: RouteHandler<ServerTables<Fixtures, Models>, Models> | undefined,
+  ): void {
+    this.#register(route.method, route.path, handler ?? route.response, {});
   }
 
   #register(
@@ -729,6 +796,12 @@ export class Server<
     options: GetRouteOptions,
   ): void {
     const address = this.#boundary.resolve(this.urlPrefix, this.namespace, path);
+
+    if (options.openapi) {
+      const route = compileOpenApiRouteContract(method, address.path, options.openapi);
+      this.#openApiOperations.register([route], { replace: true });
+    }
+
     this.#boundary.own(address);
 
     if (responder === undefined || typeof responder === "string") {
@@ -743,6 +816,7 @@ export class Server<
         { coalesce: options.coalesce },
       );
       const routeOptions: RouteOptions = {
+        openapi: options.openapi,
         status: options.status ?? (method === "POST" ? 201 : 200),
         timing: options.timing,
       };
@@ -782,11 +856,30 @@ function isShorthandMethod(method: HttpMethod): method is ShorthandMethod {
 }
 
 function isGetRouteOptions(value: unknown): value is GetRouteOptions {
+  if (typeof value !== "object" || value === null || value instanceof Response) {
+    return false;
+  }
+
+  const entries = Object.entries(value);
   return (
-    typeof value === "object" &&
-    value !== null &&
-    !(value instanceof Response) &&
-    Object.prototype.hasOwnProperty.call(value, "coalesce")
+    entries.length > 0 &&
+    entries.every(([key, option]) => {
+      switch (key) {
+        case "coalesce": {
+          return typeof option === "boolean";
+        }
+        case "openapi": {
+          return typeof option === "object" && option !== null;
+        }
+        case "status":
+        case "timing": {
+          return typeof option === "number";
+        }
+        default: {
+          return false;
+        }
+      }
+    })
   );
 }
 
@@ -810,7 +903,7 @@ export function createServer<Fixtures extends DatabaseData = {}, Models extends 
     urlPrefix: options.urlPrefix,
   });
   if (options.openapi) {
-    server.loadOpenApi(options.openapi);
+    server.loadOpenApi(options.openapi, options.openapiHandlers);
   }
   options.routes?.call(server);
   options.seeds?.(server);
@@ -858,6 +951,14 @@ async function createRouteRequest(
     params,
     queryParams: Object.fromEntries(url.searchParams),
     requestBody: await request.clone().text(),
+    validated: {
+      parameters: {
+        cookie: {},
+        header: {},
+        path: {},
+        query: {},
+      },
+    },
   };
 }
 

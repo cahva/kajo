@@ -25,7 +25,7 @@ supported APIs may still change; the changelog documents every change.
 | Mirage capability                      | Kajo status     | Notes                                                                                              |
 | -------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------- |
 | `createServer()` and `Server`          | **Supported**   | Typed fixtures, models, factories, serializers, routes, and seeds.                                 |
-| HTTP verb route helpers                | **Supported**   | `get`, `post`, `put`, `patch`, `delete`/`del`, `head`, and `options`.                              |
+| HTTP verb route helpers                | **Supported**   | `get`, `post`, `put`, `patch`, `delete`/`del`, `head`, `options`, and `trace`.                     |
 | Static, function, and async handlers   | **Supported**   | Handlers may return JSON values, models, collections, or native responses.                         |
 | Dynamic `:params` and query parameters | **Supported**   | Available through the typed `KajoRequest`.                                                         |
 | Wildcard route segments                | **Supported**   | A final `*name` captures one or more decoded path segments.                                        |
@@ -130,12 +130,20 @@ not as a list of fixes to port.
 ## Remaining work
 
 The Mirage-style core is implemented and tested. The remaining work is the
-OpenAPI convenience layer and the first release:
+OpenAPI contract layer and the first release:
 
-1. Expand the OpenAPI 3.1 route adapter with external `$ref` resolution and
-   request validation.
+1. Add imported JSON Schema validation, model-backed `resource()` contract
+   generation, and external `$ref` resolution.
 2. Publish the first release.
 
 OpenAPI documents can register deterministic example-backed routes, generate
-response bodies from JSON Schemas, and resolve local JSON Pointers; explicit
-Kajo routes remain the highest-precedence source of behavior.
+response bodies from JSON Schemas, resolve local JSON Pointers, connect
+operation handlers to Kajo data, and merge Kajo route contracts into an
+exported document. Kajo contracts also validate Standard Schema request bodies
+and parameters. Explicit Kajo routes remain the highest-precedence source of
+behavior.
+
+The complete ReadMe OpenAPI 3.1 Petstore document is part of the compatibility
+suite: all 20 operations compile, including local component references,
+JSON/XML alternatives, schema-generated responses, error-only response sets,
+and model-backed operation handlers.

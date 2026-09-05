@@ -1,4 +1,3 @@
-import "./server.ts";
 import "./style.css";
 import {
   createTask,
@@ -9,7 +8,8 @@ import {
   type ApiUser,
   type Summary,
 } from "./api.ts";
-import type { TaskStatus } from "./server.ts";
+import { schemaName } from "./server.ts";
+import type { TaskStatus } from "./schemas/types.ts";
 
 const statuses: readonly { label: string; value: TaskStatus }[] = [
   { label: "Backlog", value: "backlog" },
@@ -21,6 +21,26 @@ const board = requiredElement("board");
 const summary = requiredElement("summary");
 const form = requiredElement<HTMLFormElement>("task-form");
 const assignee = requiredElement<HTMLSelectElement>("assignee");
+const schemaImplementation = requiredElement("schema-implementation");
+
+schemaImplementation.replaceChildren(
+  ...(["zod", "valibot", "arktype"] as const).map((name) => {
+    const link = document.createElement("a");
+    link.href = `?schema=${name}`;
+    link.textContent = name === "arktype" ? "ArkType" : `${name[0]!.toUpperCase()}${name.slice(1)}`;
+
+    if (name === schemaName) {
+      link.ariaCurrent = "page";
+    }
+
+    return link;
+  }),
+);
+const openApiLink = document.createElement("a");
+openApiLink.ariaDisabled = "true";
+openApiLink.textContent = "Preparing OpenAPI…";
+schemaImplementation.append(openApiLink);
+void prepareOpenApiDownload(openApiLink);
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -36,6 +56,34 @@ form.addEventListener("submit", (event) => {
 });
 
 void refresh();
+
+async function prepareOpenApiDownload(link: HTMLAnchorElement): Promise<void> {
+  try {
+    const response = await fetch("/api/openapi.json");
+
+    if (!response.ok) {
+      throw new Error(`OpenAPI export failed with ${response.status}.`);
+    }
+
+    const document: unknown = await response.json();
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(document, null, 2)], {
+        type: "application/json",
+      }),
+    );
+    link.ariaDisabled = "false";
+    link.download = "kajo-task-board.openapi.json";
+    link.href = url;
+    link.textContent = "OpenAPI ↓";
+    link.title = "Download the generated OpenAPI document";
+    window.addEventListener("pagehide", () => URL.revokeObjectURL(url), {
+      once: true,
+    });
+  } catch (error) {
+    link.textContent = "OpenAPI unavailable";
+    link.title = error instanceof Error ? error.message : "OpenAPI export failed.";
+  }
+}
 
 async function refresh(): Promise<void> {
   setBusy(true);
