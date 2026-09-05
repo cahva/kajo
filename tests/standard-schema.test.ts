@@ -1,4 +1,5 @@
 import { toStandardJsonSchema } from "@valibot/to-json-schema";
+import { type } from "arktype";
 import * as v from "valibot";
 import { describe, expect, expectTypeOf, test } from "vite-plus/test";
 import * as z from "zod";
@@ -64,6 +65,39 @@ describe("Standard JSON Schema models", () => {
 
     expectTypeOf(task.completed).toEqualTypeOf<boolean>();
     expect(definition.schema["~standard"].vendor).toBe("valibot");
+  });
+
+  test("accepts ArkType through the same schema interface", async () => {
+    const Task = type({
+      completed: "boolean",
+      title: "string",
+    });
+    const definition = model(Task);
+    const server = createServer({
+      intercept: false,
+      models: { task: definition },
+    });
+    const attributes = {
+      completed: true,
+      title: "Validate with ArkType",
+    };
+    const task = server.schema.tasks.create(attributes);
+    const validation = await definition.schema["~standard"].validate(attributes);
+
+    expectTypeOf(task.title).toEqualTypeOf<string>();
+    expect(validation).toEqual({ value: attributes });
+    expect(
+      definition.schema["~standard"].jsonSchema.output({
+        target: "draft-2020-12",
+      }),
+    ).toMatchObject({
+      properties: {
+        completed: { type: "boolean" },
+        title: { type: "string" },
+      },
+      required: ["completed", "title"],
+      type: "object",
+    });
   });
 
   test("preserves type-only model definitions", () => {
