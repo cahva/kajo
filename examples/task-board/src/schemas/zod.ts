@@ -9,6 +9,11 @@ const task = z.object({
 const user = z.object({
   name: z.string().min(1),
 });
+const apiTask = task.extend({
+  assigneeId: z.string(),
+  id: z.string(),
+});
+const apiUser = user.extend({ id: z.string() });
 
 export const schemas = {
   createTaskRequest: z.object({
@@ -17,13 +22,19 @@ export const schemas = {
     }),
   }),
   id: z.string().min(1),
+  summary: z.object({
+    done: z.number().int().nonnegative(),
+    open: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+  }),
   task,
   taskResponse: z.object({
-    task: task.extend({
-      assigneeId: z.string(),
-      id: z.string(),
-    }),
-    users: z.array(user.extend({ id: z.string() })),
+    task: apiTask,
+    users: z.array(apiUser),
+  }),
+  tasksResponse: z.object({
+    tasks: z.array(apiTask),
+    users: z.array(apiUser),
   }),
   updateTaskRequest: z.object({
     task: z.object({ status }),

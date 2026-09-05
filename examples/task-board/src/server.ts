@@ -82,8 +82,20 @@ export const server = createServer({
   routes() {
     this.namespace = "/api";
 
-    this.resource("tasks", {
-      only: ["index", "delete"],
+    this.get("/tasks", "tasks", {
+      openapi: {
+        operationId: "listTasks",
+        responses: {
+          "200": {
+            content: {
+              "application/json": {
+                schema: schemas.tasksResponse,
+              },
+            },
+            description: "Task board",
+          },
+        },
+      },
     });
 
     this.post(
@@ -112,12 +124,12 @@ export const server = createServer({
     );
 
     this.patch(
-      "/tasks/:taskId",
+      "/tasks/:id",
       (schema, request) => {
-        const task = schema.tasks.find(request.validated.parameters.path.taskId as string);
+        const task = schema.tasks.find(request.validated.parameters.path.id as string);
 
         if (!task) {
-          throw new HttpError(404, `Task "${request.params.taskId}" was not found.`);
+          throw new HttpError(404, `Task "${request.params.id}" was not found.`);
         }
 
         return task.update((request.validated.body as UpdateTaskRequest).task);
@@ -128,7 +140,7 @@ export const server = createServer({
           parameters: [
             {
               in: "path",
-              name: "taskId",
+              name: "id",
               required: true,
               schema: schemas.id,
             },
@@ -148,15 +160,51 @@ export const server = createServer({
       },
     );
 
-    this.get("/summary", (schema) => {
-      const tasks = schema.tasks.all().models;
-
-      return {
-        done: tasks.filter((task) => task.status === "done").length,
-        open: tasks.filter((task) => task.status !== "done").length,
-        total: tasks.length,
-      };
+    this.delete("/tasks/:id", "tasks", {
+      status: 204,
+      openapi: {
+        operationId: "deleteTask",
+        parameters: [
+          {
+            in: "path",
+            name: "id",
+            required: true,
+            schema: schemas.id,
+          },
+        ],
+        responses: {
+          "204": { description: "Deleted task" },
+        },
+      },
     });
+
+    this.get(
+      "/summary",
+      (schema) => {
+        const tasks = schema.tasks.all().models;
+
+        return {
+          done: tasks.filter((task) => task.status === "done").length,
+          open: tasks.filter((task) => task.status !== "done").length,
+          total: tasks.length,
+        };
+      },
+      {
+        openapi: {
+          operationId: "getTaskSummary",
+          responses: {
+            "200": {
+              content: {
+                "application/json": {
+                  schema: schemas.summary,
+                },
+              },
+              description: "Task counts by completion state",
+            },
+          },
+        },
+      },
+    );
   },
 });
 

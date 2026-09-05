@@ -94,6 +94,8 @@ and this project adheres to
   values and structured `400` validation responses.
 - Request validation and generated OpenAPI document inspection in every
   task-board schema implementation.
+- Complete OpenAPI coverage for every application endpoint used by the
+  task-board frontend.
 
 ### Changed
 

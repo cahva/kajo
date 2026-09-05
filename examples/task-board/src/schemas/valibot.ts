@@ -10,6 +10,16 @@ const task = v.object({
 const user = v.object({
   name: v.pipe(v.string(), v.minLength(1)),
 });
+const apiTask = v.object({
+  assigneeId: v.string(),
+  id: v.string(),
+  status,
+  title: v.string(),
+});
+const apiUser = v.object({
+  id: v.string(),
+  name: v.string(),
+});
 
 export const schemas = {
   createTaskRequest: toStandardJsonSchema(
@@ -22,21 +32,24 @@ export const schemas = {
     }),
   ),
   id: toStandardJsonSchema(v.pipe(v.string(), v.minLength(1))),
+  summary: toStandardJsonSchema(
+    v.object({
+      done: v.pipe(v.number(), v.integer(), v.minValue(0)),
+      open: v.pipe(v.number(), v.integer(), v.minValue(0)),
+      total: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    }),
+  ),
   task: toStandardJsonSchema(task),
   taskResponse: toStandardJsonSchema(
     v.object({
-      task: v.object({
-        assigneeId: v.string(),
-        id: v.string(),
-        status,
-        title: v.string(),
-      }),
-      users: v.array(
-        v.object({
-          id: v.string(),
-          name: v.string(),
-        }),
-      ),
+      task: apiTask,
+      users: v.array(apiUser),
+    }),
+  ),
+  tasksResponse: toStandardJsonSchema(
+    v.object({
+      tasks: v.array(apiTask),
+      users: v.array(apiUser),
     }),
   ),
   updateTaskRequest: toStandardJsonSchema(

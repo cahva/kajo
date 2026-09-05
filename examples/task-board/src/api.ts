@@ -1,4 +1,6 @@
-import type { TaskStatus } from "./schemas/types.ts";
+import type { Summary, TaskStatus } from "./schemas/types.ts";
+
+export type { Summary } from "./schemas/types.ts";
 
 export interface ApiUser {
   id: string;
@@ -10,12 +12,6 @@ export interface ApiTask {
   id: string;
   status: TaskStatus;
   title: string;
-}
-
-export interface Summary {
-  done: number;
-  open: number;
-  total: number;
 }
 
 interface TaskPayload {

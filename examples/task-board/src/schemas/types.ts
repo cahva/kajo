@@ -34,11 +34,27 @@ export interface TaskResponse {
   users: (User & { id: string })[];
 }
 
+export interface TasksResponse {
+  tasks: (Task & {
+    assigneeId: string;
+    id: string;
+  })[];
+  users: (User & { id: string })[];
+}
+
+export interface Summary {
+  done: number;
+  open: number;
+  total: number;
+}
+
 export interface TaskBoardSchemas {
   readonly createTaskRequest: KajoSchema<unknown, CreateTaskRequest>;
   readonly id: KajoSchema<unknown, string>;
+  readonly summary: KajoSchema<unknown, Summary>;
   readonly task: KajoSchema<unknown, Task>;
   readonly taskResponse: KajoSchema<unknown, TaskResponse>;
+  readonly tasksResponse: KajoSchema<unknown, TasksResponse>;
   readonly updateTaskRequest: KajoSchema<unknown, UpdateTaskRequest>;
   readonly user: KajoSchema<unknown, User>;
 }

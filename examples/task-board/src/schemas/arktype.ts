@@ -9,6 +9,16 @@ const task = type({
 const user = type({
   name: "string > 0",
 });
+const apiTask = type({
+  assigneeId: "string",
+  id: "string",
+  status,
+  title: "string",
+});
+const apiUser = type({
+  id: "string",
+  name: "string",
+});
 
 export const schemas = {
   createTaskRequest: type({
@@ -19,18 +29,19 @@ export const schemas = {
     },
   }),
   id: type("string > 0"),
+  summary: type({
+    done: "number.integer >= 0",
+    open: "number.integer >= 0",
+    total: "number.integer >= 0",
+  }),
   task,
   taskResponse: type({
-    task: {
-      assigneeId: "string",
-      id: "string",
-      status,
-      title: "string",
-    },
-    users: type({
-      id: "string",
-      name: "string",
-    }).array(),
+    task: apiTask,
+    users: apiUser.array(),
+  }),
+  tasksResponse: type({
+    tasks: apiTask.array(),
+    users: apiUser.array(),
   }),
   updateTaskRequest: type({
     task: { status },
