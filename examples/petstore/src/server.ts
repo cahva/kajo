@@ -23,6 +23,7 @@ const models = {
 
 export const server = createServer({
   intercept: true,
+  logging: true,
   models,
   openapi: petstore as unknown as OpenApiDocument,
   openapiHandlers: {

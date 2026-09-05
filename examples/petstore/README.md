@@ -23,4 +23,8 @@ implement `getPetById`, `findPetsByStatus`, `addPet`, `deletePet`,
 button deliberately uses the unimplemented `getInventory` operation to show
 Kajo's schema-generated fallback.
 
+Kajo request logging is enabled for the example. Open the browser developer
+console to inspect collapsed request and response diagnostics while using the
+workbench.
+
 Development is tracked in [issue #3](https://github.com/cahva/kajo/issues/3).
