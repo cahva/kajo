@@ -773,7 +773,19 @@ function selectResponse(
   }
 
   const fallback = responses.default;
-  return fallback ? { response: fallback, status: 200 } : undefined;
+
+  if (fallback) {
+    return { response: fallback, status: 200 };
+  }
+
+  const documented = Object.entries(responses)
+    .filter(
+      (entry): entry is [string, OpenApiResponse | OpenApiReference] =>
+        entry[1] !== undefined && /^[1-5]\d{2}$/.test(entry[0]),
+    )
+    .sort(([left], [right]) => Number(left) - Number(right))[0];
+
+  return documented ? { response: documented[1], status: Number(documented[0]) } : undefined;
 }
 
 function selectMediaType(

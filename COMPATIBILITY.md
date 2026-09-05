@@ -142,3 +142,8 @@ operation handlers to Kajo data, and merge Kajo route contracts into an
 exported document. Kajo contracts also validate Standard Schema request bodies
 and parameters. Explicit Kajo routes remain the highest-precedence source of
 behavior.
+
+The complete ReadMe OpenAPI 3.1 Petstore document is part of the compatibility
+suite: all 20 operations compile, including local component references,
+JSON/XML alternatives, schema-generated responses, error-only response sets,
+and model-backed operation handlers.

@@ -497,6 +497,13 @@ Plain JSON Schemas in imported OpenAPI documents are not validated yet. They
 will use a separate JSON Schema engine so Kajo-defined contracts can continue
 using the developer's chosen Standard Schema implementation.
 
+Kajo's compatibility suite compiles all 20 operations in ReadMe's unmodified
+OpenAPI 3.1 Petstore document. Documents with a `servers` base currently pass
+that URL through `urlPrefix`; automatic server selection, security enforcement,
+and imported JSON Schema validation remain future work. Operations without a
+`2xx` response use their lowest documented concrete status as the generated
+fallback, while an `operationId` handler can provide application behavior.
+
 Operations without examples generate a deterministic body from the response
 JSON Schema. Each schema node uses `example`, `examples`, `const`, `default`,
 or `enum` when present, merges `allOf`, picks the first `oneOf` or `anyOf`

@@ -96,6 +96,8 @@ and this project adheres to
   task-board schema implementation.
 - Complete OpenAPI coverage for every application endpoint used by the
   task-board frontend.
+- Compatibility coverage for all 20 operations in ReadMe's OpenAPI 3.1
+  Petstore document.
 
 ### Changed
 
@@ -129,5 +131,7 @@ and this project adheres to
   OpenAPI request and response contracts.
 - Downloaded the task-board OpenAPI export through Fetch instead of navigating
   to a client-intercepted endpoint.
+- Allowed imported operations without a `2xx` response to use their lowest
+  documented concrete response as a generated fallback.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD
