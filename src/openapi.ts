@@ -31,6 +31,10 @@ export type {
   OpenApiRoute,
   OpenApiRouteContract,
   OpenApiSchema,
+  OpenApiSchemaValidator,
+  OpenApiSchemaValidatorContext,
+  OpenApiSchemaValidatorIssue,
+  OpenApiSchemaValidatorResult,
   OpenApiValidatedRequest,
   OpenApiValidationIssue,
   OpenApiValidationResult,
@@ -85,6 +89,7 @@ export function compileOpenApiRoutes(
 
       registered.add(identity);
       routes.push({
+        document,
         method: routeMethod,
         openApiPath,
         operation: normalizeOperation(operation, operationId),
@@ -198,6 +203,7 @@ function assertSupportedRequestContract(contract: OpenApiRouteContract, path: st
 function normalizeOperation(operation: OpenApiOperation, operationId: string): OpenApiOperation {
   return {
     ...operation,
+    operationId,
     parameters: operation.parameters?.map((parameter) =>
       isReference(parameter)
         ? parameter

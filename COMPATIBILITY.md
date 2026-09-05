@@ -132,8 +132,8 @@ not as a list of fixes to port.
 The Mirage-style core is implemented and tested. The remaining work is the
 OpenAPI contract layer and the first release:
 
-1. Add imported JSON Schema validation, model-backed `resource()` contract
-   generation, and external `$ref` resolution.
+1. Add an optional JSON Schema validator adapter, model-backed `resource()`
+   contract generation, and external `$ref` resolution.
 2. Publish the first release.
 
 OpenAPI documents can register deterministic example-backed routes, generate

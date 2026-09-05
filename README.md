@@ -496,9 +496,29 @@ Request content matching is case-insensitive and honors exact media types,
 receive a structured `400` response with the operation ID and validation
 issues; the handler is not called.
 
-Plain JSON Schemas in imported OpenAPI documents are not validated yet. They
-will use a separate JSON Schema engine so Kajo-defined contracts can continue
+Plain JSON Schemas in imported OpenAPI documents are not validated by default.
+They use a separate JSON Schema engine so Kajo-defined contracts can continue
 using the developer's chosen Standard Schema implementation.
+
+Imported schemas can be validated through the framework-neutral
+`openapiValidator` option. Kajo resolves local references, decodes OpenAPI
+parameter values, parses the selected request media type, and passes the plain
+JSON Schema and value to the adapter:
+
+```ts
+createServer({
+  openapi: document,
+  openapiValidator: {
+    validate(schema, value, context) {
+      return validator.validate(schema, value, context);
+    },
+  },
+});
+```
+
+Without an adapter, imported documents preserve their existing generated-mock
+behavior. Kajo-authored Standard Schema contracts continue validating through
+their own library regardless of this option.
 
 Kajo's compatibility suite compiles all 20 operations in ReadMe's unmodified
 OpenAPI 3.1 Petstore document. Documents with a `servers` base currently pass

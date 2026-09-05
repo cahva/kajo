@@ -100,6 +100,9 @@ and this project adheres to
   Petstore document.
 - An OpenAPI-first Petstore browser example with generated TypeScript types,
   seeded operation handlers, and schema-generated fallback behavior.
+- A pluggable JSON Schema validator boundary for imported OpenAPI parameters
+  and request bodies, including local reference resolution and primitive
+  parameter decoding.
 
 ### Changed
 
