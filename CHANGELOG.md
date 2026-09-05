@@ -98,6 +98,8 @@ and this project adheres to
   task-board frontend.
 - Compatibility coverage for all 20 operations in ReadMe's OpenAPI 3.1
   Petstore document.
+- An OpenAPI-first Petstore browser example with generated TypeScript types,
+  seeded operation handlers, and schema-generated fallback behavior.
 
 ### Changed
 
@@ -133,6 +135,8 @@ and this project adheres to
   to a client-intercepted endpoint.
 - Allowed imported operations without a `2xx` response to use their lowest
   documented concrete response as a generated fallback.
+- Surfaced matched path and parsed query parameters in request diagnostics and
+  omitted empty request-body rows.
 - Preserved OpenAPI validation options on shorthand routes and recognized
   responder-less GET contracts without requiring `coalesce`.
 - Completed required OpenAPI path parameters automatically, supported `TRACE`,

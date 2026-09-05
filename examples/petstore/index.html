@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="An OpenAPI-first Petstore powered by Kajo." />
+    <title>Kajo OpenAPI Petstore</title>
+  </head>
+  <body>
+    <main>
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Kajo OpenAPI-first example</p>
+          <h1>Petstore,<br />without the backend.</h1>
+          <p class="intro">
+            The API starts with the unmodified OpenAPI 3.1 Petstore document. Its TypeScript types,
+            Kajo routes, and generated fallbacks all come from the same contract.
+          </p>
+        </div>
+        <div class="contract-card">
+          <span class="contract-pulse"></span>
+          <div>
+            <strong>Swagger Petstore</strong>
+            <span>OpenAPI 3.1 · 20 operations</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="workbench">
+        <aside class="operations" aria-label="Petstore operations">
+          <div class="section-heading">
+            <p class="section-label">Try the contract</p>
+            <span>6 implemented</span>
+          </div>
+
+          <button id="available" class="operation active" data-operation>
+            <span class="method get">GET</span>
+            <span><strong>Available pets</strong><small>/pet/findByStatus</small></span>
+          </button>
+          <form id="pet-lookup" class="lookup-operation" data-operation>
+            <div class="create-heading">
+              <span class="method get">GET</span>
+              <span><strong>Pet by ID</strong><small>/pet/{petId}</small></span>
+            </div>
+            <label for="pet-id">Pet ID</label>
+            <div class="input-row">
+              <input id="pet-id" name="petId" value="1" required />
+              <button type="submit">Fetch</button>
+            </div>
+          </form>
+          <button id="order" class="operation" data-operation>
+            <span class="method get">GET</span>
+            <span><strong>Order by ID</strong><small>/store/order/{orderId}</small></span>
+          </button>
+          <button id="inventory" class="operation generated" data-operation>
+            <span class="method get">GET</span>
+            <span><strong>Inventory</strong><small>Schema-generated fallback</small></span>
+          </button>
+
+          <form id="pet-form" class="create-operation" data-operation>
+            <div class="create-heading">
+              <span class="method post">POST</span>
+              <span><strong>Add a pet</strong><small>/pet</small></span>
+            </div>
+            <label for="pet-name">Pet name</label>
+            <div class="input-row">
+              <input id="pet-name" name="name" value="Kajo" required />
+              <button type="submit">Send</button>
+            </div>
+          </form>
+        </aside>
+
+        <section class="response">
+          <div class="response-topline">
+            <div>
+              <p class="section-label">Response</p>
+              <h2 id="result-title">Available pets</h2>
+            </div>
+            <span id="mode" class="mode">Implemented</span>
+          </div>
+          <div class="request-line">
+            <span id="result-method" class="method get">GET</span>
+            <code id="result-path">/v2/pet/findByStatus?status=available</code>
+            <span id="result-status" class="status">200 OK</span>
+          </div>
+          <div id="result-preview" class="result-preview" aria-live="polite"></div>
+          <details>
+            <summary>Raw response payload</summary>
+            <pre id="result"></pre>
+          </details>
+        </section>
+      </section>
+
+      <footer>
+        <strong>One contract, three outputs.</strong>
+        <span>Runtime routes · TypeScript types · deterministic mock data</span>
+      </footer>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -23,6 +23,7 @@
     "build": "vp pack",
     "check": "vp check",
     "dev": "vp pack --watch",
+    "example:petstore": "cd examples/petstore && vp run dev",
     "example:task-board": "cd examples/task-board && vp dev",
     "publish:check": "vp exec jsr publish --dry-run --allow-dirty",
     "release": "vp exec jsr publish",
