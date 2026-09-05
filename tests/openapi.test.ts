@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
+import { type as arkType } from "arktype";
 import * as z from "zod";
 import {
   compileOpenApiRoutes,
@@ -416,6 +417,41 @@ describe("OpenAPI", () => {
       required: true,
     });
     expect(JSON.stringify(requestBody)).not.toContain("~standard");
+  });
+
+  test("accepts callable Standard Schema request contracts", async () => {
+    const server = createServer({
+      intercept: false,
+      routes() {
+        this.post("/tasks", () => undefined, {
+          openapi: {
+            operationId: "createTask",
+            requestBody: arkType({ title: "string > 0" }),
+            responses: {
+              "204": { description: "Created task" },
+            },
+          },
+        });
+      },
+    });
+
+    const valid = await server.handle(
+      new Request("https://example.test/tasks", {
+        body: JSON.stringify({ title: "ArkType contract" }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    const invalid = await server.handle(
+      new Request("https://example.test/tasks", {
+        body: JSON.stringify({ title: "" }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+
+    expect(valid?.status).toBe(204);
+    expect(invalid?.status).toBe(400);
   });
 
   test("validates path, query, header, and cookie parameters", async () => {

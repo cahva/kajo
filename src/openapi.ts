@@ -1054,7 +1054,7 @@ function isReference(value: object): value is OpenApiReference {
 }
 
 function isKajoSchema(value: unknown): value is KajoSchema {
-  if (typeof value !== "object" || value === null) {
+  if ((typeof value !== "object" && typeof value !== "function") || value === null) {
     return false;
   }
 
