@@ -5,7 +5,7 @@ const executablePath = process.env.KAJO_CHROMIUM_PATH;
 
 export default defineConfig({
   optimizeDeps: {
-    include: ["zod"],
+    include: ["ajv/dist/2020.js", "ajv-formats", "zod"],
   },
   test: {
     include: ["tests/browser/*.test.ts"],
