@@ -86,6 +86,8 @@ and this project adheres to
   including inferred persisted attributes and retained runtime metadata.
 - Interchangeable Zod, Valibot, and ArkType implementations in the task-board
   example using one frontend and Kajo server configuration.
+- OpenAPI operation registries and `operationId` handlers that connect imported
+  contracts to seeded Kajo data while retaining generated fallbacks.
 
 ### Changed
 

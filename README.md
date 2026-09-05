@@ -404,6 +404,31 @@ const server = createServer({
 });
 ```
 
+Imported operations can use Kajo's database and schema through handlers keyed
+by `operationId`. Operations without a handler continue using their example or
+generated schema value:
+
+```ts
+createServer({
+  openapi: document,
+  models: {
+    task: model(TaskSchema),
+  },
+  fixtures: {
+    tasks: [{ id: "1", title: "On the horizon" }],
+  },
+  openapiHandlers: {
+    listTasks: (schema) => schema.tasks.all(),
+    getTask: (schema, request) => schema.tasks.find(request.params.taskId),
+  },
+});
+```
+
+Handler names must match an operation in the document. Duplicate operation IDs
+and duplicate method/path registrations fail when the document is loaded.
+Explicit routes declared in `routes()` are registered later and retain highest
+precedence.
+
 Operations without examples generate a deterministic body from the response
 JSON Schema. Each schema node uses `example`, `examples`, `const`, `default`,
 or `enum` when present, merges `allOf`, picks the first `oneOf` or `anyOf`

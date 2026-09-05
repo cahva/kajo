@@ -71,8 +71,42 @@ export interface OpenApiReference {
 
 export interface OpenApiRoute {
   readonly method: OpenApiMethod;
+  readonly operationId: string;
   readonly path: string;
   readonly response: Response;
+}
+
+export class OpenApiOperationRegistry {
+  readonly #identities = new Set<string>();
+  readonly #operationIds = new Set<string>();
+
+  register(routes: readonly OpenApiRoute[]): void {
+    const identities = new Set<string>();
+    const operationIds = new Set<string>();
+
+    for (const route of routes) {
+      const identity = `${route.method} ${route.path}`;
+
+      if (this.#identities.has(identity) || identities.has(identity)) {
+        throw new TypeError(`OpenAPI operation "${identity}" is already registered.`);
+      }
+
+      if (this.#operationIds.has(route.operationId) || operationIds.has(route.operationId)) {
+        throw new TypeError(`OpenAPI operationId "${route.operationId}" is already registered.`);
+      }
+
+      identities.add(identity);
+      operationIds.add(route.operationId);
+    }
+
+    for (const identity of identities) {
+      this.#identities.add(identity);
+    }
+
+    for (const operationId of operationIds) {
+      this.#operationIds.add(operationId);
+    }
+  }
 }
 
 /**
@@ -113,6 +147,7 @@ export function compileOpenApiRoutes(document: OpenApiDocument): OpenApiRoute[] 
 
       const routeMethod = method.toUpperCase() as OpenApiMethod;
       const identity = `${routeMethod} ${path}`;
+      const operationId = operationIdFor(operation, method, openApiPath);
 
       if (registered.has(identity)) {
         throw new TypeError(`OpenAPI defines duplicate Kajo route "${identity}".`);
@@ -121,6 +156,7 @@ export function compileOpenApiRoutes(document: OpenApiDocument): OpenApiRoute[] 
       registered.add(identity);
       routes.push({
         method: routeMethod,
+        operationId,
         path,
         response: exampleResponse(operation, identity, references),
       });
@@ -128,6 +164,30 @@ export function compileOpenApiRoutes(document: OpenApiDocument): OpenApiRoute[] 
   }
 
   return routes;
+}
+
+function operationIdFor(
+  operation: OpenApiOperation,
+  method: (typeof OPENAPI_METHODS)[number],
+  path: string,
+): string {
+  if (operation.operationId !== undefined) {
+    if (!operation.operationId.trim()) {
+      throw new TypeError(
+        `OpenAPI operation "${method.toUpperCase()} ${path}" has an empty operationId.`,
+      );
+    }
+
+    return operation.operationId;
+  }
+
+  const segments = path
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => segment.replaceAll(/[{}]/g, ""))
+    .map((segment) => `${segment[0]?.toUpperCase() ?? ""}${segment.slice(1)}`);
+
+  return `${method}${segments.join("")}`;
 }
 
 function toKajoPath(path: string): string {

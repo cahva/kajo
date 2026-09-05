@@ -42,7 +42,12 @@ import {
   type RequestLogger,
   type UnhandledRequestLog,
 } from "./logging.ts";
-import { compileOpenApiRoutes, type OpenApiDocument } from "./openapi.ts";
+import {
+  compileOpenApiRoutes,
+  type OpenApiDocument,
+  OpenApiOperationRegistry,
+  type OpenApiRoute,
+} from "./openapi.ts";
 import { Router } from "./router.ts";
 import { serialize, type SerializerRegistry } from "./serializer.ts";
 import {
@@ -92,6 +97,11 @@ export type IdentityManagerRegistry<Fixtures extends DatabaseData, Models extend
   readonly [Name in (keyof Fixtures | keyof Models) & string]?: IdentityManagerConstructor;
 };
 
+export type OpenApiHandlerRegistry<
+  Fixtures extends DatabaseData,
+  Models extends ModelRegistry,
+> = Readonly<Record<string, RouteHandler<ServerTables<Fixtures, Models>, Models> | undefined>>;
+
 export interface ServerOptions<
   Fixtures extends DatabaseData = DatabaseData,
   Models extends ModelRegistry = {},
@@ -120,6 +130,8 @@ export interface ServerOptions<
   readonly models?: Models;
   /** Register example-backed routes from an OpenAPI 3.1 document. */
   readonly openapi?: OpenApiDocument;
+  /** Override imported OpenAPI operations by their operationId. */
+  readonly openapiHandlers?: OpenApiHandlerRegistry<Fixtures, Models>;
   /** Initialize additional application data. */
   readonly seeds?: (server: Server<Fixtures, Models>) => void;
   /** Application and per-model response serializers. */
@@ -139,6 +151,7 @@ export class Server<
   readonly #factories: FactoryRegistry<Models>;
   readonly #fixtures: Fixtures;
   readonly #models: Models;
+  readonly #openApiOperations = new OpenApiOperationRegistry();
   readonly #factorySequences = new Map<string, number>();
   readonly #factoryStack: string[] = [];
   readonly #requestHistory: RequestLog[] = [];
@@ -716,10 +729,31 @@ export class Server<
    *
    * Routes registered later with the same method and path take precedence.
    */
-  loadOpenApi(document: OpenApiDocument): void {
-    for (const route of compileOpenApiRoutes(document)) {
-      this.#register(route.method, route.path, route.response, {});
+  loadOpenApi(
+    document: OpenApiDocument,
+    handlers: OpenApiHandlerRegistry<Fixtures, Models> = {},
+  ): void {
+    const routes = compileOpenApiRoutes(document);
+    const operationIds = new Set(routes.map(({ operationId }) => operationId));
+
+    for (const operationId of Object.keys(handlers)) {
+      if (!operationIds.has(operationId)) {
+        throw new TypeError(`No OpenAPI operation with operationId "${operationId}" was found.`);
+      }
     }
+
+    this.#openApiOperations.register(routes);
+
+    for (const route of routes) {
+      this.#registerOpenApiRoute(route, handlers[route.operationId]);
+    }
+  }
+
+  #registerOpenApiRoute(
+    route: OpenApiRoute,
+    handler: RouteHandler<ServerTables<Fixtures, Models>, Models> | undefined,
+  ): void {
+    this.#register(route.method, route.path, handler ?? route.response, {});
   }
 
   #register(
@@ -810,7 +844,7 @@ export function createServer<Fixtures extends DatabaseData = {}, Models extends 
     urlPrefix: options.urlPrefix,
   });
   if (options.openapi) {
-    server.loadOpenApi(options.openapi);
+    server.loadOpenApi(options.openapi, options.openapiHandlers);
   }
   options.routes?.call(server);
   options.seeds?.(server);

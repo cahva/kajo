@@ -2,6 +2,7 @@ import { describe, expect, test } from "vite-plus/test";
 import {
   compileOpenApiRoutes,
   createServer,
+  model,
   type OpenApiDocument,
   type OpenApiPathItem,
   type OpenApiReference,
@@ -97,6 +98,9 @@ describe("OpenAPI", () => {
     const server = createServer({
       intercept: false,
       openapi: document,
+      openapiHandlers: {
+        getTask: () => ({ source: "operation handler" }),
+      },
       routes() {
         this.get("/tasks/:taskId", (_schema, request) => ({
           id: request.params.taskId,
@@ -111,6 +115,97 @@ describe("OpenAPI", () => {
       id: "42",
       source: "handler",
     });
+  });
+
+  test("uses operationId handlers with seeded Kajo data", async () => {
+    const server = createServer({
+      fixtures: {
+        tasks: [
+          { id: "1", title: "First seeded task" },
+          { id: "2", title: "Second seeded task" },
+        ],
+      },
+      intercept: false,
+      models: {
+        task: model<{ title: string }>(),
+      },
+      openapi: document,
+      openapiHandlers: {
+        getTask: (schema, request) => schema.tasks.find(request.params.taskId),
+      },
+    });
+
+    const handled = await server.handle(new Request("https://example.test/tasks/2"));
+    const generated = await server.handle(
+      new Request("https://example.test/tasks", { method: "POST" }),
+    );
+
+    await expect(handled?.json()).resolves.toEqual({
+      task: {
+        id: "2",
+        title: "Second seeded task",
+      },
+    });
+    await expect(generated?.json()).resolves.toEqual({
+      id: "1",
+      title: "Ship OpenAPI",
+    });
+  });
+
+  test("validates operation handler names and registry identities atomically", async () => {
+    const server = createServer({ intercept: false });
+
+    expect(() =>
+      server.loadOpenApi(document, {
+        missingOperation: () => null,
+      }),
+    ).toThrow('No OpenAPI operation with operationId "missingOperation" was found.');
+
+    server.loadOpenApi(document);
+    await expect(
+      server.handle(new Request("https://example.test/tasks/1")),
+    ).resolves.toBeInstanceOf(Response);
+    expect(() => server.loadOpenApi(document)).toThrow(
+      'OpenAPI operation "POST /tasks" is already registered.',
+    );
+
+    expect(() =>
+      createServer({
+        intercept: false,
+        openapi: {
+          openapi: "3.1.0",
+          paths: {
+            "/first": {
+              get: {
+                operationId: "duplicate",
+                responses: { "204": { description: "Done" } },
+              },
+            },
+            "/second": {
+              get: {
+                operationId: "duplicate",
+                responses: { "204": { description: "Done" } },
+              },
+            },
+          },
+        },
+      }),
+    ).toThrow('OpenAPI operationId "duplicate" is already registered.');
+  });
+
+  test("generates stable operationIds when the document omits them", () => {
+    const [route] = compileOpenApiRoutes({
+      openapi: "3.1.0",
+      paths: {
+        "/tasks/{taskId}/comments": {
+          get: {
+            responses: { "204": { description: "Done" } },
+          },
+        },
+      },
+    });
+
+    expect(route?.operationId).toBe("getTasksTaskIdComments");
   });
 
   test("supports loading additional documents after construction", async () => {

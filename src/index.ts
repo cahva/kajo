@@ -104,6 +104,7 @@ export type {
   FactoryRegistry,
   GetRouteOptions,
   IdentityManagerRegistry,
+  OpenApiHandlerRegistry,
   PassthroughOptions,
   ResourceAction,
   ResourceOptions,
