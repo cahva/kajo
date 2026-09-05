@@ -125,5 +125,7 @@ and this project adheres to
   routes nor disappear from handler request parameters.
 - Recognized callable Standard Schema implementations such as ArkType in
   OpenAPI request and response contracts.
+- Downloaded the task-board OpenAPI export through Fetch instead of navigating
+  to a client-intercepted endpoint.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD

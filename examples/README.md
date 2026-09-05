@@ -18,9 +18,12 @@ http://localhost:5173/?schema=arktype
 ```
 
 Create and update requests are validated by the selected schema implementation
-before their handlers run. The shared server exports those contracts as an
-OpenAPI 3.1 document at
-[`/api/openapi.json`](http://localhost:5173/api/openapi.json).
+before their handlers run. Use the **OpenAPI ↓** action in the running app to
+download the generated OpenAPI 3.1 document.
+
+The app fetches that document from `/api/openapi.json`. Opening the endpoint as
+a browser page does not work because Kajo starts intercepting requests only
+after the application has loaded; an initial navigation is handled by Vite.
 
 From the repository root:
 
