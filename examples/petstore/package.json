@@ -1,0 +1,18 @@
+{
+  "name": "@cahva/kajo-example-petstore",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vp build",
+    "check": "vp check",
+    "dev": "vp dev",
+    "generate": "openapi-typescript ./node_modules/@readme/oas-examples/3.1/json/petstore.json -o ./src/petstore.generated.ts"
+  },
+  "devDependencies": {
+    "@readme/oas-examples": "^8.2.2",
+    "openapi-typescript": "^7.13.0",
+    "typescript": "^5.9.3",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
