@@ -1,4 +1,4 @@
-import type { TaskStatus } from "./server.ts";
+import type { TaskStatus } from "./schemas/types.ts";
 
 export interface ApiUser {
   id: string;

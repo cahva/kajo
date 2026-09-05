@@ -562,7 +562,9 @@ supported behavior, intentional differences, and the remaining work.
 ## Examples
 
 Runnable examples live in [`examples`](./examples). The vanilla TypeScript task
-board exercises Kajo through real browser requests:
+board exercises Kajo through real browser requests and can switch between Zod,
+Valibot, and ArkType model schemas without changing its frontend or server
+behavior:
 
 ```bash
 vp install

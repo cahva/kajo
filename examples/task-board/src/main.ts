@@ -1,4 +1,3 @@
-import "./server.ts";
 import "./style.css";
 import {
   createTask,
@@ -9,7 +8,8 @@ import {
   type ApiUser,
   type Summary,
 } from "./api.ts";
-import type { TaskStatus } from "./server.ts";
+import { schemaName } from "./server.ts";
+import type { TaskStatus } from "./schemas/types.ts";
 
 const statuses: readonly { label: string; value: TaskStatus }[] = [
   { label: "Backlog", value: "backlog" },
@@ -21,6 +21,21 @@ const board = requiredElement("board");
 const summary = requiredElement("summary");
 const form = requiredElement<HTMLFormElement>("task-form");
 const assignee = requiredElement<HTMLSelectElement>("assignee");
+const schemaImplementation = requiredElement("schema-implementation");
+
+schemaImplementation.replaceChildren(
+  ...(["zod", "valibot", "arktype"] as const).map((name) => {
+    const link = document.createElement("a");
+    link.href = `?schema=${name}`;
+    link.textContent = name === "arktype" ? "ArkType" : `${name[0]!.toUpperCase()}${name.slice(1)}`;
+
+    if (name === schemaName) {
+      link.ariaCurrent = "page";
+    }
+
+    return link;
+  }),
+);
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();

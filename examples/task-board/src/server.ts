@@ -10,23 +10,21 @@ import {
   Serializer,
   trait,
 } from "../../../src/index.ts";
+import type { SchemaName, Task, TaskBoardSchemas, User } from "./schemas/types.ts";
 
-export type TaskStatus = "backlog" | "in-progress" | "done";
+const schemaLoaders = {
+  arktype: () => import("./schemas/arktype.ts"),
+  valibot: () => import("./schemas/valibot.ts"),
+  zod: () => import("./schemas/zod.ts"),
+} satisfies Record<SchemaName, () => Promise<{ schemas: TaskBoardSchemas }>>;
 
-interface Task {
-  status: TaskStatus;
-  title: string;
-}
-
-interface User {
-  name: string;
-}
-
+export const schemaName = selectedSchema();
+const { schemas } = await schemaLoaders[schemaName]();
 const models = {
-  task: model<Task>().extend({
+  task: model(schemas.task).extend({
     assignee: belongsTo("user"),
   }),
-  user: model<User>().extend({
+  user: model(schemas.user).extend({
     tasks: hasMany("task"),
   }),
 };
@@ -94,4 +92,9 @@ export const server = createServer({
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => server.shutdown());
+}
+
+function selectedSchema(): SchemaName {
+  const selected = new URL(window.location.href).searchParams.get("schema");
+  return selected === "arktype" || selected === "valibot" || selected === "zod" ? selected : "zod";
 }

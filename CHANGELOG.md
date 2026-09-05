@@ -84,6 +84,8 @@ and this project adheres to
   formats, and typed placeholder synthesis.
 - Schema-backed model definitions using the Standard JSON Schema interface,
   including inferred persisted attributes and retained runtime metadata.
+- Interchangeable Zod, Valibot, and ArkType implementations in the task-board
+  example using one frontend and Kajo server configuration.
 
 ### Changed
 
