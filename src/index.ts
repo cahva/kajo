@@ -4,6 +4,7 @@
  * @module
  */
 
+export type { StandardJSONSchemaV1, StandardSchemaV1 } from "@standard-schema/spec";
 export { createDatabase, IdentityManager } from "./database.ts";
 export type {
   Database,
@@ -118,3 +119,4 @@ export type {
   SerializerOptions,
   SerializerRegistry,
 } from "./serializer.ts";
+export type { InferSchemaInput, InferSchemaOutput, KajoSchema } from "./standard-schema.ts";

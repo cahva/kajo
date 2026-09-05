@@ -82,6 +82,8 @@ and this project adheres to
 - Deterministic JSON Schema response generation for OpenAPI operations without
   examples, covering `const`, `default`, `enum`, composition keywords, string
   formats, and typed placeholder synthesis.
+- Schema-backed model definitions using the Standard JSON Schema interface,
+  including inferred persisted attributes and retained runtime metadata.
 
 ### Changed
 

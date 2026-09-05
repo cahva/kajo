@@ -183,6 +183,29 @@ const models = {
 };
 ```
 
+Models can also infer their attributes from any
+[Standard JSON Schema](https://standardschema.dev/json-schema)-compatible
+schema. Kajo does not depend on the schema library:
+
+```ts
+import { z } from "zod";
+
+const Task = z.object({
+  completed: z.boolean().default(false),
+  title: z.string().min(1),
+});
+
+const models = {
+  task: model(Task),
+};
+```
+
+The schema remains available on the model definition for validation and future
+OpenAPI generation. Zod, ArkType, Valibot's Standard JSON Schema adapter, and
+other compatible implementations use the same Kajo API. The existing
+`model<Task>()` form remains available when runtime schema metadata is not
+needed.
+
 Kajo infers the inverse when there is exactly one match. Use
 `{ inverse: "relationshipName" }` to disambiguate, or `{ inverse: null }` for
 an association without an inverse.

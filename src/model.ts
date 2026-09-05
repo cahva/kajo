@@ -8,6 +8,7 @@ import type {
   TableRecord,
   UpdateAttributes,
 } from "./database.ts";
+import type { InferSchemaOutput, KajoSchema } from "./standard-schema.ts";
 
 declare const modelAttributes: unique symbol;
 declare const modelRelationships: unique symbol;
@@ -109,14 +110,18 @@ export function hasMany(
 export interface ModelDefinition<
   Attributes extends object = object,
   Relationships extends RelationshipRegistry = RelationshipRegistry,
+  AttributeSchema extends KajoSchema<unknown, Attributes> | undefined =
+    | KajoSchema<unknown, Attributes>
+    | undefined,
 > {
   readonly relationships: Relationships;
+  readonly schema: AttributeSchema;
   readonly [modelAttributes]?: Attributes;
   readonly [modelRelationships]?: Relationships;
 
   extend<Additional extends RelationshipRegistry>(
     relationships: Additional,
-  ): ModelDefinition<Attributes, Relationships & Additional>;
+  ): ModelDefinition<Attributes, Relationships & Additional, AttributeSchema>;
 }
 
 export type ModelRegistry = Record<string, ModelDefinition>;
@@ -158,22 +163,40 @@ export type ModelTables<Models extends ModelRegistry> = {
 /**
  * Define a model's attribute type.
  */
-export function model<Attributes extends object = object>(): ModelDefinition<Attributes, {}> {
-  return createModelDefinition<Attributes, {}>({});
+export function model<Attributes extends object = object>(): ModelDefinition<
+  Attributes,
+  {},
+  undefined
+>;
+export function model<AttributeSchema extends KajoSchema<unknown, object>>(
+  schema: AttributeSchema,
+): ModelDefinition<InferSchemaOutput<AttributeSchema>, {}, AttributeSchema>;
+export function model(
+  schema?: KajoSchema<unknown, object>,
+): ModelDefinition<object, {}, KajoSchema<unknown, object> | undefined> {
+  return createModelDefinition<object, {}, KajoSchema<unknown, object> | undefined>({}, schema);
 }
 
 function createModelDefinition<
   Attributes extends object,
   Relationships extends RelationshipRegistry,
->(relationships: Relationships): ModelDefinition<Attributes, Relationships> {
+  AttributeSchema extends KajoSchema<unknown, Attributes> | undefined,
+>(
+  relationships: Relationships,
+  schema: AttributeSchema,
+): ModelDefinition<Attributes, Relationships, AttributeSchema> {
   return Object.freeze({
     extend<Additional extends RelationshipRegistry>(additional: Additional) {
-      return createModelDefinition<Attributes, Relationships & Additional>({
-        ...relationships,
-        ...additional,
-      });
+      return createModelDefinition<Attributes, Relationships & Additional, AttributeSchema>(
+        {
+          ...relationships,
+          ...additional,
+        },
+        schema,
+      );
     },
     relationships,
+    schema,
   });
 }
 
