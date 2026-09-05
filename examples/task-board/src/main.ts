@@ -36,6 +36,12 @@ schemaImplementation.replaceChildren(
     return link;
   }),
 );
+const openApiLink = document.createElement("a");
+openApiLink.href = "/api/openapi.json";
+openApiLink.target = "_blank";
+openApiLink.rel = "noreferrer";
+openApiLink.textContent = "OpenAPI ↗";
+schemaImplementation.append(openApiLink);
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();

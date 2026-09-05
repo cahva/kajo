@@ -74,7 +74,22 @@ async function request<Result>(path: string, init?: RequestInit): Promise<Result
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed with ${response.status} ${response.statusText}`);
+    const details = await response
+      .clone()
+      .json()
+      .catch(() => undefined);
+    const issues =
+      typeof details === "object" &&
+      details !== null &&
+      Array.isArray(Reflect.get(details, "issues"))
+        ? (Reflect.get(details, "issues") as { message?: unknown }[])
+        : [];
+    const message = issues
+      .map(({ message }) => (typeof message === "string" ? message : undefined))
+      .filter(Boolean)
+      .join(" ");
+
+    throw new Error(message || `Request failed with ${response.status} ${response.statusText}`);
   }
 
   return response.body ? (response.json() as Promise<Result>) : (undefined as Result);

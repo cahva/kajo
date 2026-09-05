@@ -17,6 +17,11 @@ http://localhost:5173/?schema=valibot
 http://localhost:5173/?schema=arktype
 ```
 
+Create and update requests are validated by the selected schema implementation
+before their handlers run. The shared server exports those contracts as an
+OpenAPI 3.1 document at
+[`/api/openapi.json`](http://localhost:5173/api/openapi.json).
+
 From the repository root:
 
 ```sh

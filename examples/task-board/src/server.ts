@@ -6,11 +6,19 @@ import {
   createServer,
   Factory,
   hasMany,
+  HttpError,
   model,
   Serializer,
   trait,
 } from "../../../src/index.ts";
-import type { SchemaName, Task, TaskBoardSchemas, User } from "./schemas/types.ts";
+import type {
+  CreateTaskRequest,
+  SchemaName,
+  Task,
+  TaskBoardSchemas,
+  UpdateTaskRequest,
+  User,
+} from "./schemas/types.ts";
 
 const schemaLoaders = {
   arktype: () => import("./schemas/arktype.ts"),
@@ -75,8 +83,70 @@ export const server = createServer({
     this.namespace = "/api";
 
     this.resource("tasks", {
-      only: ["index", "create", "update", "delete"],
+      only: ["index", "delete"],
     });
+
+    this.post(
+      "/tasks",
+      (schema, request) => {
+        const { task } = request.validated.body as CreateTaskRequest;
+        return schema.tasks.create(task);
+      },
+      {
+        status: 201,
+        openapi: {
+          operationId: "createTask",
+          requestBody: schemas.createTaskRequest,
+          responses: {
+            "201": {
+              content: {
+                "application/json": {
+                  schema: schemas.taskResponse,
+                },
+              },
+              description: "Created task",
+            },
+          },
+        },
+      },
+    );
+
+    this.patch(
+      "/tasks/:taskId",
+      (schema, request) => {
+        const task = schema.tasks.find(request.validated.parameters.path.taskId as string);
+
+        if (!task) {
+          throw new HttpError(404, `Task "${request.params.taskId}" was not found.`);
+        }
+
+        return task.update((request.validated.body as UpdateTaskRequest).task);
+      },
+      {
+        openapi: {
+          operationId: "updateTask",
+          parameters: [
+            {
+              in: "path",
+              name: "taskId",
+              required: true,
+              schema: schemas.id,
+            },
+          ],
+          requestBody: schemas.updateTaskRequest,
+          responses: {
+            "200": {
+              content: {
+                "application/json": {
+                  schema: schemas.taskResponse,
+                },
+              },
+              description: "Updated task",
+            },
+          },
+        },
+      },
+    );
 
     this.get("/summary", (schema) => {
       const tasks = schema.tasks.all().models;
@@ -89,6 +159,16 @@ export const server = createServer({
     });
   },
 });
+
+server.get("/openapi.json", () =>
+  Response.json(
+    server.openApiDocument({
+      description: `Generated from the ${schemaName} task-board contracts.`,
+      title: "Kajo task board",
+      version: "1.0.0",
+    }),
+  ),
+);
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => server.shutdown());

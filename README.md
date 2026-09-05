@@ -658,7 +658,8 @@ supported behavior, intentional differences, and the remaining work.
 Runnable examples live in [`examples`](./examples). The vanilla TypeScript task
 board exercises Kajo through real browser requests and can switch between Zod,
 Valibot, and ArkType model schemas without changing its frontend or server
-behavior:
+behavior. Its create and update routes validate requests with the selected
+library and export their contracts at `/api/openapi.json`:
 
 ```bash
 vp install

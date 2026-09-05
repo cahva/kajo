@@ -92,6 +92,8 @@ and this project adheres to
   Standard Schema responses converted to JSON Schema.
 - Standard Schema request-body and parameter contracts with transformed handler
   values and structured `400` validation responses.
+- Request validation and generated OpenAPI document inspection in every
+  task-board schema implementation.
 
 ### Changed
 
@@ -121,5 +123,7 @@ and this project adheres to
   binary request and response bodies unchanged.
 - Added regression coverage ensuring query strings neither bypass registered
   routes nor disappear from handler request parameters.
+- Recognized callable Standard Schema implementations such as ArkType in
+  OpenAPI request and response contracts.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD
