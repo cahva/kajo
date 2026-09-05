@@ -132,12 +132,13 @@ not as a list of fixes to port.
 The Mirage-style core is implemented and tested. The remaining work is the
 OpenAPI contract layer and the first release:
 
-1. Add request contracts and validation, model-backed `resource()` contract
+1. Add imported JSON Schema validation, model-backed `resource()` contract
    generation, and external `$ref` resolution.
 2. Publish the first release.
 
 OpenAPI documents can register deterministic example-backed routes, generate
 response bodies from JSON Schemas, resolve local JSON Pointers, connect
 operation handlers to Kajo data, and merge Kajo route contracts into an
-exported document. Explicit Kajo routes remain the highest-precedence source of
+exported document. Kajo contracts also validate Standard Schema request bodies
+and parameters. Explicit Kajo routes remain the highest-precedence source of
 behavior.

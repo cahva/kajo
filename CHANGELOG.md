@@ -90,6 +90,8 @@ and this project adheres to
   contracts to seeded Kajo data while retaining generated fallbacks.
 - OpenAPI contracts on Kajo-defined routes and combined document export, with
   Standard Schema responses converted to JSON Schema.
+- Standard Schema request-body and parameter contracts with transformed handler
+  values and structured `400` validation responses.
 
 ### Changed
 

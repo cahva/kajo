@@ -94,12 +94,17 @@ export type {
   OpenApiMediaType,
   OpenApiMethod,
   OpenApiOperation,
+  OpenApiParameter,
   OpenApiPathItem,
   OpenApiReference,
+  OpenApiRequestBody,
   OpenApiResponse,
   OpenApiRoute,
   OpenApiRouteContract,
   OpenApiSchema,
+  OpenApiValidatedRequest,
+  OpenApiValidationIssue,
+  OpenApiValidationResult,
 } from "./openapi.ts";
 export { createServer, Server } from "./server.ts";
 export type {

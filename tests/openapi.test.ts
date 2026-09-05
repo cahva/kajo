@@ -7,6 +7,7 @@ import {
   type OpenApiDocument,
   type OpenApiPathItem,
   type OpenApiReference,
+  type OpenApiRequestBody,
   type OpenApiSchema,
 } from "../src/index.ts";
 
@@ -343,6 +344,206 @@ describe("OpenAPI", () => {
         },
       }),
     ).toThrow('OpenAPI route contract "/files/*path" cannot contain a wildcard.');
+  });
+
+  test("validates and transforms Standard Schema request bodies", async () => {
+    const CreateTask = z.object({
+      priority: z.coerce.number().int().min(1),
+      title: z.string().min(1),
+    });
+    const server = createServer({
+      intercept: false,
+      routes() {
+        this.post(
+          "/tasks",
+          (_schema, request) => Response.json({ received: request.validated.body }),
+          {
+            openapi: {
+              operationId: "createTask",
+              requestBody: CreateTask,
+              responses: {
+                "200": { description: "Created task" },
+              },
+            },
+          },
+        );
+      },
+    });
+
+    const valid = await server.handle(
+      new Request("https://example.test/tasks", {
+        body: JSON.stringify({ priority: "2", title: "Validated" }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    const invalid = await server.handle(
+      new Request("https://example.test/tasks", {
+        body: JSON.stringify({ priority: 0, title: "" }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+
+    await expect(valid?.json()).resolves.toEqual({
+      received: { priority: 2, title: "Validated" },
+    });
+    expect(invalid?.status).toBe(400);
+    await expect(invalid?.json()).resolves.toMatchObject({
+      error: "OpenAPI request validation failed.",
+      issues: [
+        { location: "body", path: ["priority"] },
+        { location: "body", path: ["title"] },
+      ],
+      operationId: "createTask",
+    });
+    const exported = server.openApiDocument({ title: "Tasks", version: "1.0.0" });
+    const requestBody = (exported.paths["/tasks"] as OpenApiPathItem).post
+      ?.requestBody as OpenApiRequestBody;
+    expect(requestBody).toMatchObject({
+      content: {
+        "application/json": {
+          schema: {
+            properties: {
+              priority: { type: "integer" },
+              title: { minLength: 1, type: "string" },
+            },
+            required: ["priority", "title"],
+            type: "object",
+          },
+        },
+      },
+      required: true,
+    });
+    expect(JSON.stringify(requestBody)).not.toContain("~standard");
+  });
+
+  test("validates path, query, header, and cookie parameters", async () => {
+    const server = createServer({
+      intercept: false,
+      routes() {
+        this.get(
+          "/tasks/:taskId",
+          (_schema, request) => Response.json(request.validated.parameters),
+          {
+            openapi: {
+              operationId: "getTask",
+              parameters: [
+                {
+                  in: "path",
+                  name: "taskId",
+                  required: true,
+                  schema: z.coerce.number().int().positive(),
+                },
+                {
+                  explode: false,
+                  in: "query",
+                  name: "tag",
+                  schema: z.array(z.string()),
+                },
+                {
+                  in: "header",
+                  name: "x-mode",
+                  required: true,
+                  schema: z.literal("preview"),
+                },
+                {
+                  in: "cookie",
+                  name: "session",
+                  schema: z.string().min(1),
+                },
+              ],
+              responses: {
+                "200": { description: "Task parameters" },
+              },
+            },
+          },
+        );
+      },
+    });
+
+    const valid = await server.handle(
+      new Request("https://example.test/tasks/42?tag=api,typed", {
+        headers: {
+          cookie: "session=abc123; theme=dark",
+          "x-mode": "preview",
+        },
+      }),
+    );
+    const missing = await server.handle(new Request("https://example.test/tasks/42?tag=api,typed"));
+
+    await expect(valid?.json()).resolves.toEqual({
+      cookie: { session: "abc123" },
+      header: { "x-mode": "preview" },
+      path: { taskId: 42 },
+      query: { tag: ["api", "typed"] },
+    });
+    expect(missing?.status).toBe(400);
+    await expect(missing?.json()).resolves.toMatchObject({
+      issues: [
+        {
+          location: "header",
+          message: 'Required header parameter "x-mode" is missing.',
+          name: "x-mode",
+        },
+      ],
+      operationId: "getTask",
+    });
+  });
+
+  test("reports malformed JSON before invoking the contracted handler", async () => {
+    let handled = false;
+    const server = createServer({
+      intercept: false,
+      routes() {
+        this.post(
+          "/tasks",
+          () => {
+            handled = true;
+            return null;
+          },
+          {
+            openapi: {
+              operationId: "createTask",
+              requestBody: z.object({ title: z.string() }),
+              responses: {
+                "204": { description: "Created" },
+              },
+            },
+          },
+        );
+      },
+    });
+
+    const response = await server.handle(
+      new Request("https://example.test/tasks", {
+        body: "{",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    const wrongContentType = await server.handle(
+      new Request("https://example.test/tasks", {
+        body: JSON.stringify({ title: "Wrong content type" }),
+        headers: { "content-type": "text/plain" },
+        method: "POST",
+      }),
+    );
+
+    expect(handled).toBe(false);
+    expect(response?.status).toBe(400);
+    await expect(response?.json()).resolves.toMatchObject({
+      issues: [{ location: "body", message: "Request body is not valid JSON." }],
+    });
+    expect(wrongContentType?.status).toBe(400);
+    await expect(wrongContentType?.json()).resolves.toMatchObject({
+      issues: [
+        {
+          location: "body",
+          message: 'Content type "text/plain" is not declared by this operation.',
+        },
+      ],
+    });
   });
 
   test("supports loading additional documents after construction", async () => {

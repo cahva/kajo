@@ -460,6 +460,43 @@ Kajo route replaces an imported operation at the same method and path, matching
 runtime route precedence. Export currently supports one imported base document
 plus any number of Kajo-defined contracts.
 
+Standard Schema request bodies validate and transform input before the route
+handler runs. Passing a schema directly declares a required JSON body:
+
+```ts
+const CreateTask = z.object({
+  priority: z.coerce.number().int().positive(),
+  title: z.string().min(1),
+});
+
+this.post(
+  "/tasks",
+  (_schema, request) => {
+    return Response.json({ received: request.validated.body });
+  },
+  {
+    openapi: {
+      operationId: "createTask",
+      requestBody: CreateTask,
+      responses: {
+        "201": { description: "Created task" },
+      },
+    },
+  },
+);
+```
+
+Contract parameters can use Standard Schemas in `path`, `query`, `header`, and
+`cookie`. Validated and transformed values are available under
+`request.validated.parameters`. Query arrays support repeated values by default
+and comma-separated values with `explode: false`. Invalid requests receive a
+structured `400` response with the operation ID and validation issues; the
+handler is not called.
+
+Plain JSON Schemas in imported OpenAPI documents are not validated yet. They
+will use a separate JSON Schema engine so Kajo-defined contracts can continue
+using the developer's chosen Standard Schema implementation.
+
 Operations without examples generate a deterministic body from the response
 JSON Schema. Each schema node uses `example`, `examples`, `const`, `default`,
 or `enum` when present, merges `allOf`, picks the first `oneOf` or `anyOf`
@@ -470,10 +507,10 @@ declared property for objects. Unconstrained schemas produce `{}`, and
 recursive schemas require an explicit example.
 
 The OpenAPI integration supports inline examples, locally referenced examples,
-schema-generated values, operation handlers, and exporting route contracts.
-Local JSON Pointer references can target path items, responses, examples, and
-schemas. External `$ref` resolution, request contracts, and validation are
-planned next.
+schema-generated values, operation handlers, route-contract export, and
+Standard Schema request validation. Local JSON Pointer references can target
+path items, responses, examples, and schemas. External `$ref` resolution and
+validation of imported plain JSON Schemas are planned next.
 
 Kajo owns same-origin routes by default in browsers. Set `urlPrefix` for an
 external API; requests outside that origin and namespace are ignored

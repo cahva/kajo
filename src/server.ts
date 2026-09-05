@@ -49,6 +49,7 @@ import {
   type OpenApiInfo,
   OpenApiOperationRegistry,
   type OpenApiRoute,
+  validateOpenApiRequest,
 } from "./openapi.ts";
 import { Router } from "./router.ts";
 import { serialize, type SerializerRegistry } from "./serializer.ts";
@@ -520,13 +521,30 @@ export class Server<
     }
 
     const startedAt = now();
-    const routeRequest = await createRouteRequest(request, match.params, url);
+    let routeRequest = await createRouteRequest(request, match.params, url);
     let result: JsonSerializable | JsonValue | Response | undefined;
     let response: Response;
 
     try {
       try {
-        result = await resolveResponder(match.route.responder, routeRequest, this.schema);
+        const contract = match.route.options.openapi;
+        const validation = contract
+          ? await validateOpenApiRequest(contract, routeRequest)
+          : { value: routeRequest.validated };
+
+        if ("issues" in validation) {
+          result = Response.json(
+            {
+              error: "OpenAPI request validation failed.",
+              issues: validation.issues,
+              operationId: contract?.operationId,
+            },
+            { status: 400 },
+          );
+        } else {
+          routeRequest = { ...routeRequest, validated: validation.value };
+          result = await resolveResponder(match.route.responder, routeRequest, this.schema);
+        }
       } catch (error) {
         if (!(error instanceof HttpError)) {
           throw error;
@@ -905,6 +923,14 @@ async function createRouteRequest(
     params,
     queryParams: Object.fromEntries(url.searchParams),
     requestBody: await request.clone().text(),
+    validated: {
+      parameters: {
+        cookie: {},
+        header: {},
+        path: {},
+        query: {},
+      },
+    },
   };
 }
 
