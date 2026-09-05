@@ -1,254 +1,54 @@
 import type { KajoRequest } from "./http.ts";
 import type { KajoSchema } from "./standard-schema.ts";
+import {
+  isJsonMediaType,
+  mediaRangeSpecificity,
+  mediaTypeMatches,
+  mediaTypePriority,
+  normalizeMediaType,
+  serializeExampleBody,
+} from "./openapi/media-types.ts";
+import { isReference, LocalReferenceResolver } from "./openapi/references.ts";
+export { OpenApiOperationRegistry } from "./openapi/registry.ts";
+import { isKajoSchema, standardJsonSchema } from "./openapi/standard-schema.ts";
+import {
+  OPENAPI_METHODS,
+  type OpenApiDocument,
+  type OpenApiExample,
+  type OpenApiMediaType,
+  type OpenApiMethod,
+  type OpenApiOperation,
+  type OpenApiParameter,
+  type OpenApiPathItem,
+  type OpenApiReference,
+  type OpenApiRequestBody,
+  type OpenApiResponse,
+  type OpenApiRoute,
+  type OpenApiRouteContract,
+  type OpenApiSchema,
+  type OpenApiValidationIssue,
+  type OpenApiValidationResult,
+} from "./openapi/types.ts";
 
-const OPENAPI_METHODS = [
-  "delete",
-  "get",
-  "head",
-  "options",
-  "patch",
-  "post",
-  "put",
-  "trace",
-] as const;
-const STANDARD_JSON_SCHEMAS = {
-  input: new WeakMap<KajoSchema, OpenApiSchema>(),
-  output: new WeakMap<KajoSchema, OpenApiSchema>(),
-};
-
-export type OpenApiMethod = Uppercase<(typeof OPENAPI_METHODS)[number]>;
-
-export interface OpenApiInfo {
-  readonly title: string;
-  readonly version: string;
-  readonly [key: string]: unknown;
-}
-
-export interface OpenApiDocument {
-  readonly info?: OpenApiInfo;
-  readonly openapi: string;
-  readonly paths: Readonly<Record<string, OpenApiPathItem | OpenApiReference | undefined>>;
-  readonly [key: string]: unknown;
-}
-
-export interface OpenApiPathItem {
-  readonly delete?: OpenApiOperation;
-  readonly get?: OpenApiOperation;
-  readonly head?: OpenApiOperation;
-  readonly options?: OpenApiOperation;
-  readonly patch?: OpenApiOperation;
-  readonly post?: OpenApiOperation;
-  readonly put?: OpenApiOperation;
-  readonly trace?: OpenApiOperation;
-  readonly [key: string]: unknown;
-}
-
-export interface OpenApiOperation {
-  readonly operationId?: string;
-  readonly parameters?: readonly (OpenApiParameter | OpenApiReference)[];
-  readonly requestBody?: OpenApiRequestBody | OpenApiReference | KajoSchema;
-  readonly responses: Readonly<Record<string, OpenApiResponse | OpenApiReference | undefined>>;
-  readonly [key: string]: unknown;
-}
-
-export interface OpenApiRouteContract extends OpenApiOperation {
-  readonly operationId: string;
-}
-
-export interface OpenApiResponse {
-  readonly content?: Readonly<Record<string, OpenApiMediaType | undefined>>;
-  readonly description?: string;
-  readonly [key: string]: unknown;
-}
-
-export interface OpenApiParameter {
-  readonly explode?: boolean;
-  readonly in: "cookie" | "header" | "path" | "query";
-  readonly name: string;
-  readonly required?: boolean;
-  readonly schema?: OpenApiSchema | OpenApiReference | KajoSchema | boolean;
-  readonly style?: string;
-  readonly [key: string]: unknown;
-}
-
-export interface OpenApiRequestBody {
-  readonly content: Readonly<Record<string, OpenApiMediaType | undefined>>;
-  readonly description?: string;
-  readonly required?: boolean;
-  readonly [key: string]: unknown;
-}
-
-export interface OpenApiMediaType {
-  readonly example?: unknown;
-  readonly examples?: Readonly<Record<string, OpenApiExample | OpenApiReference | undefined>>;
-  readonly schema?: OpenApiSchema | OpenApiReference | KajoSchema | boolean;
-  readonly [key: string]: unknown;
-}
-
-export interface OpenApiExample {
-  readonly value?: unknown;
-  readonly [key: string]: unknown;
-}
-
-export interface OpenApiSchema {
-  readonly allOf?: readonly (OpenApiSchema | OpenApiReference | boolean)[];
-  readonly anyOf?: readonly (OpenApiSchema | OpenApiReference | boolean)[];
-  readonly const?: unknown;
-  readonly default?: unknown;
-  readonly enum?: readonly unknown[];
-  readonly example?: unknown;
-  readonly examples?: readonly unknown[];
-  readonly exclusiveMaximum?: number;
-  readonly exclusiveMinimum?: number;
-  readonly format?: string;
-  readonly items?: OpenApiSchema | OpenApiReference | boolean;
-  readonly maxItems?: number;
-  readonly maxLength?: number;
-  readonly maximum?: number;
-  readonly minItems?: number;
-  readonly minLength?: number;
-  readonly minimum?: number;
-  readonly multipleOf?: number;
-  readonly oneOf?: readonly (OpenApiSchema | OpenApiReference | boolean)[];
-  readonly pattern?: string;
-  readonly properties?: Readonly<
-    Record<string, OpenApiSchema | OpenApiReference | boolean | undefined>
-  >;
-  readonly required?: readonly string[];
-  readonly type?: string | readonly string[];
-  readonly uniqueItems?: boolean;
-  readonly [key: string]: unknown;
-}
-
-export interface OpenApiReference {
-  readonly $ref: string;
-  readonly [key: string]: unknown;
-}
-
-export interface OpenApiRoute {
-  readonly method: OpenApiMethod;
-  readonly openApiPath: string;
-  readonly operation: OpenApiOperation;
-  readonly operationId: string;
-  readonly path: string;
-  readonly response: Response;
-  readonly source: "kajo" | "openapi";
-}
-
-export interface OpenApiValidatedRequest {
-  readonly body?: unknown;
-  readonly parameters: {
-    readonly cookie: Readonly<Record<string, unknown>>;
-    readonly header: Readonly<Record<string, unknown>>;
-    readonly path: Readonly<Record<string, unknown>>;
-    readonly query: Readonly<Record<string, unknown>>;
-  };
-}
-
-export interface OpenApiValidationIssue {
-  readonly location: OpenApiParameter["in"] | "body";
-  readonly message: string;
-  readonly name?: string;
-  readonly path?: readonly (number | string)[];
-}
-
-export type OpenApiValidationResult =
-  | { readonly issues: readonly OpenApiValidationIssue[] }
-  | { readonly value: OpenApiValidatedRequest };
-
-export class OpenApiOperationRegistry {
-  readonly #byIdentity = new Map<string, OpenApiRoute>();
-  readonly #byOperationId = new Map<string, OpenApiRoute>();
-  readonly #documents: OpenApiDocument[] = [];
-
-  register(
-    routes: readonly OpenApiRoute[],
-    options: { readonly document?: OpenApiDocument; readonly replace?: boolean } = {},
-  ): void {
-    const identities = new Set<string>();
-    const operationIds = new Set<string>();
-
-    for (const route of routes) {
-      const identity = `${route.method} ${route.path}`;
-      const existingIdentity = this.#byIdentity.get(identity);
-      const existingOperation = this.#byOperationId.get(route.operationId);
-
-      if ((!options.replace && existingIdentity) || identities.has(identity)) {
-        throw new TypeError(`OpenAPI operation "${identity}" is already registered.`);
-      }
-
-      if (
-        (!options.replace && existingOperation) ||
-        (existingOperation && existingOperation !== existingIdentity) ||
-        operationIds.has(route.operationId)
-      ) {
-        throw new TypeError(`OpenAPI operationId "${route.operationId}" is already registered.`);
-      }
-
-      identities.add(identity);
-      operationIds.add(route.operationId);
-    }
-
-    for (const route of routes) {
-      const identity = `${route.method} ${route.path}`;
-      const replaced = this.#byIdentity.get(identity);
-
-      if (replaced) {
-        this.#byOperationId.delete(replaced.operationId);
-      }
-
-      this.#byIdentity.set(identity, route);
-      this.#byOperationId.set(route.operationId, route);
-    }
-
-    if (options.document) {
-      this.#documents.push(options.document);
-    }
-  }
-
-  document(info?: OpenApiInfo): OpenApiDocument {
-    if (this.#documents.length > 1) {
-      throw new TypeError("Cannot export more than one imported OpenAPI document yet.");
-    }
-
-    const imported = this.#documents[0];
-    const documentInfo = info ?? imported?.info;
-
-    if (!documentInfo) {
-      throw new TypeError("OpenAPI export requires an info object with a title and version.");
-    }
-
-    const paths: Record<string, Record<string, unknown>> = Object.fromEntries(
-      Object.entries(imported?.paths ?? {}).flatMap(([path, pathItem]) =>
-        pathItem ? [[path, isReference(pathItem) ? pathItem : { ...pathItem }]] : [],
-      ),
-    );
-
-    for (const route of this.#byIdentity.values()) {
-      if (route.source === "openapi") {
-        continue;
-      }
-
-      const existing = paths[route.openApiPath];
-
-      if (existing && isReference(existing)) {
-        throw new TypeError(
-          `Cannot replace operation in referenced OpenAPI path item "${route.openApiPath}".`,
-        );
-      }
-
-      const pathItem = (paths[route.openApiPath] ??= {});
-      pathItem[route.method.toLowerCase()] = route.operation;
-    }
-
-    return {
-      ...imported,
-      info: documentInfo,
-      openapi: imported?.openapi ?? "3.1.0",
-      paths: paths as OpenApiDocument["paths"],
-    };
-  }
-}
+export type {
+  OpenApiDocument,
+  OpenApiExample,
+  OpenApiInfo,
+  OpenApiMediaType,
+  OpenApiMethod,
+  OpenApiOperation,
+  OpenApiParameter,
+  OpenApiPathItem,
+  OpenApiReference,
+  OpenApiRequestBody,
+  OpenApiResponse,
+  OpenApiRoute,
+  OpenApiRouteContract,
+  OpenApiSchema,
+  OpenApiValidatedRequest,
+  OpenApiValidationIssue,
+  OpenApiValidationResult,
+} from "./openapi/types.ts";
 
 /**
  * Compile example-backed operations from an OpenAPI 3.1 document into Kajo routes.
@@ -1331,174 +1131,4 @@ function firstNonNullType(type: OpenApiSchema["type"]): string | undefined {
   }
 
   return type.find((entry): entry is string => typeof entry === "string" && entry !== "null");
-}
-
-class LocalReferenceResolver {
-  constructor(private readonly document: OpenApiDocument) {}
-
-  resolve(value: object, location: string, seen = new Set<string>()): object {
-    if ("$ref" in value && typeof value.$ref !== "string") {
-      throw new TypeError(`OpenAPI $ref at ${location} must be a string.`);
-    }
-
-    if (!isReference(value)) {
-      return value;
-    }
-
-    const reference = value.$ref;
-
-    if (!reference.startsWith("#")) {
-      throw new TypeError(`External OpenAPI $ref is not supported at ${location}: "${reference}".`);
-    }
-
-    if (seen.has(reference)) {
-      throw new TypeError(`Circular OpenAPI $ref at ${location}: "${reference}".`);
-    }
-
-    seen.add(reference);
-    const target = this.resolvePointer(reference, location);
-    return this.resolve(target, location, seen);
-  }
-
-  private resolvePointer(reference: string, location: string): object {
-    if (reference === "#") {
-      return this.document;
-    }
-
-    if (!reference.startsWith("#/")) {
-      throw new TypeError(`Invalid local OpenAPI $ref at ${location}: "${reference}".`);
-    }
-
-    let current: unknown = this.document;
-
-    for (const encodedToken of reference.slice(2).split("/")) {
-      const token = decodePointerToken(encodedToken, reference, location);
-
-      if (
-        typeof current !== "object" ||
-        current === null ||
-        !Object.prototype.hasOwnProperty.call(current, token)
-      ) {
-        throw new TypeError(`OpenAPI $ref at ${location} does not exist: "${reference}".`);
-      }
-
-      current = Reflect.get(current, token);
-    }
-
-    if (typeof current !== "object" || current === null || Array.isArray(current)) {
-      throw new TypeError(
-        `OpenAPI $ref at ${location} does not point to an object: "${reference}".`,
-      );
-    }
-
-    return current;
-  }
-}
-
-function isReference(value: object): value is OpenApiReference {
-  return "$ref" in value && typeof value.$ref === "string";
-}
-
-function isKajoSchema(value: unknown): value is KajoSchema {
-  if ((typeof value !== "object" && typeof value !== "function") || value === null) {
-    return false;
-  }
-
-  const standard = Reflect.get(value, "~standard");
-  return (
-    typeof standard === "object" &&
-    standard !== null &&
-    typeof Reflect.get(standard, "validate") === "function" &&
-    typeof Reflect.get(Reflect.get(standard, "jsonSchema") ?? {}, "output") === "function"
-  );
-}
-
-function standardJsonSchema(schema: KajoSchema, mode: "input" | "output"): OpenApiSchema {
-  const cached = STANDARD_JSON_SCHEMAS[mode].get(schema);
-
-  if (cached) {
-    return cached;
-  }
-
-  const converted = schema["~standard"].jsonSchema[mode]({
-    target: "draft-2020-12",
-  }) as OpenApiSchema;
-  STANDARD_JSON_SCHEMAS[mode].set(schema, converted);
-  return converted;
-}
-
-function decodePointerToken(token: string, reference: string, location: string): string {
-  try {
-    const decoded = decodeURIComponent(token);
-
-    if (/~(?:[^01]|$)/.test(decoded)) {
-      throw new TypeError();
-    }
-
-    return decoded.replaceAll("~1", "/").replaceAll("~0", "~");
-  } catch {
-    throw new TypeError(`Invalid local OpenAPI $ref at ${location}: "${reference}".`);
-  }
-}
-
-function mediaTypePriority(mediaType: string): number {
-  const normalized = normalizeMediaType(mediaType);
-
-  if (normalized === "application/json") {
-    return 0;
-  }
-
-  return normalized.endsWith("+json") ? 1 : 2;
-}
-
-function isJsonMediaType(mediaType: string | undefined): boolean {
-  if (!mediaType) {
-    return false;
-  }
-
-  const normalized = normalizeMediaType(mediaType);
-  return normalized === "application/json" || normalized.endsWith("+json");
-}
-
-function normalizeMediaType(mediaType: string): string {
-  return mediaType.split(";")[0]!.trim().toLowerCase();
-}
-
-function mediaTypeMatches(range: string, mediaType: string): boolean {
-  const normalizedRange = normalizeMediaType(range);
-
-  if (normalizedRange === "*/*" || normalizedRange === mediaType) {
-    return true;
-  }
-
-  const [rangeType, rangeSubtype] = normalizedRange.split("/");
-  const [mediaTypeType] = mediaType.split("/");
-  return rangeSubtype === "*" && rangeType === mediaTypeType;
-}
-
-function mediaRangeSpecificity(range: string): number {
-  const normalized = normalizeMediaType(range);
-  return normalized === "*/*" ? 0 : normalized.endsWith("/*") ? 1 : 2;
-}
-
-function serializeExampleBody(
-  body: unknown,
-  mediaType: string | undefined,
-  operation: string,
-): string {
-  if (isJsonMediaType(mediaType)) {
-    return JSON.stringify(body);
-  }
-
-  if (typeof body === "string") {
-    return body;
-  }
-
-  if (typeof body === "boolean" || typeof body === "number" || typeof body === "bigint") {
-    return `${body}`;
-  }
-
-  throw new TypeError(
-    `OpenAPI example for "${operation}" must be scalar for media type "${mediaType}".`,
-  );
 }
