@@ -98,6 +98,8 @@ and this project adheres to
   task-board frontend.
 - Compatibility coverage for all 20 operations in ReadMe's OpenAPI 3.1
   Petstore document.
+- An OpenAPI-first Petstore browser example with generated TypeScript types,
+  seeded operation handlers, and schema-generated fallback behavior.
 
 ### Changed
 

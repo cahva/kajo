@@ -3,10 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vp build",
-    "check": "vp check",
-    "dev": "vp dev",
-    "generate": "openapi-typescript ./node_modules/@readme/oas-examples/3.1/json/petstore.json -o ./src/petstore.generated.ts"
+    "build": "vp run generate && vp build",
+    "check": "vp run generate && vp check",
+    "dev": "vp run generate && vp dev",
+    "generate": "openapi-typescript ./node_modules/@readme/oas-examples/3.1/json/petstore.json -o ./src/petstore.generated.ts",
+    "prepare": "vp run generate"
   },
   "devDependencies": {
     "@readme/oas-examples": "^8.2.2",

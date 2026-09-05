@@ -31,3 +31,15 @@ From the repository root:
 vp install
 vp run example:task-board
 ```
+
+## OpenAPI Petstore
+
+An OpenAPI-first browser app using ReadMe's unmodified OpenAPI 3.1 Petstore
+document. `openapi-typescript` generates the Pet and Order types, Kajo handlers
+connect representative operations to seeded models, and an unimplemented
+inventory operation demonstrates schema-generated fallback behavior.
+
+```sh
+vp install
+vp run example:petstore
+```

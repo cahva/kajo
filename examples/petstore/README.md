@@ -2,16 +2,25 @@
 
 This example starts from ReadMe's unmodified OpenAPI 3.1 Petstore document and
 uses [`openapi-typescript`](https://openapi-ts.dev/) to generate the application
-types:
+types. From the repository root:
 
 ```sh
-vp run generate
+vp install
+vp run example:petstore
 ```
+
+The `dev`, `check`, and `build` commands regenerate the ignored
+`src/petstore.generated.ts` file before use. Run `vp run generate` inside this
+directory when only the types need updating.
 
 The example has its own TypeScript 5 dependency because `openapi-typescript`
 currently uses the TypeScript 5 compiler API, while Kajo's Vite+ toolchain tests
 experimental TypeScript 7.
 
-The generated types, browser UI, seeded Kajo models, and `operationId` handlers
-will be added incrementally under
-[issue #3](https://github.com/cahva/kajo/issues/3).
+The browser calls only paths declared by Petstore. Seeded, typed Kajo models
+implement `getPetById`, `findPetsByStatus`, `addPet`, `deletePet`,
+`placeOrder`, and `getOrderById` through `operationId` handlers. The inventory
+button deliberately uses the unimplemented `getInventory` operation to show
+Kajo's schema-generated fallback.
+
+Development is tracked in [issue #3](https://github.com/cahva/kajo/issues/3).

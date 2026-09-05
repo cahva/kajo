@@ -679,6 +679,7 @@ used by the frontend:
 ```bash
 vp install
 vp run example:task-board
+vp run example:petstore
 ```
 
 ## Development
