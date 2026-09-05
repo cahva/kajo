@@ -43,8 +43,10 @@ import {
   type UnhandledRequestLog,
 } from "./logging.ts";
 import {
+  compileOpenApiRouteContract,
   compileOpenApiRoutes,
   type OpenApiDocument,
+  type OpenApiInfo,
   OpenApiOperationRegistry,
   type OpenApiRoute,
 } from "./openapi.ts";
@@ -742,11 +744,16 @@ export class Server<
       }
     }
 
-    this.#openApiOperations.register(routes);
+    this.#openApiOperations.register(routes, { document });
 
     for (const route of routes) {
       this.#registerOpenApiRoute(route, handlers[route.operationId]);
     }
+  }
+
+  /** Export imported and Kajo-defined operation contracts as OpenAPI 3.1. */
+  openApiDocument(info?: OpenApiInfo): OpenApiDocument {
+    return this.#openApiOperations.document(info);
   }
 
   #registerOpenApiRoute(
@@ -763,6 +770,12 @@ export class Server<
     options: GetRouteOptions,
   ): void {
     const address = this.#boundary.resolve(this.urlPrefix, this.namespace, path);
+
+    if (options.openapi) {
+      const route = compileOpenApiRouteContract(method, address.path, options.openapi);
+      this.#openApiOperations.register([route], { replace: true });
+    }
+
     this.#boundary.own(address);
 
     if (responder === undefined || typeof responder === "string") {

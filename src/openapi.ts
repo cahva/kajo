@@ -1,8 +1,17 @@
+import type { KajoSchema } from "./standard-schema.ts";
+
 const OPENAPI_METHODS = ["delete", "get", "head", "options", "patch", "post", "put"] as const;
 
 export type OpenApiMethod = Uppercase<(typeof OPENAPI_METHODS)[number]>;
 
+export interface OpenApiInfo {
+  readonly title: string;
+  readonly version: string;
+  readonly [key: string]: unknown;
+}
+
 export interface OpenApiDocument {
+  readonly info?: OpenApiInfo;
   readonly openapi: string;
   readonly paths: Readonly<Record<string, OpenApiPathItem | OpenApiReference | undefined>>;
   readonly [key: string]: unknown;
@@ -25,6 +34,10 @@ export interface OpenApiOperation {
   readonly [key: string]: unknown;
 }
 
+export interface OpenApiRouteContract extends OpenApiOperation {
+  readonly operationId: string;
+}
+
 export interface OpenApiResponse {
   readonly content?: Readonly<Record<string, OpenApiMediaType | undefined>>;
   readonly description?: string;
@@ -34,7 +47,7 @@ export interface OpenApiResponse {
 export interface OpenApiMediaType {
   readonly example?: unknown;
   readonly examples?: Readonly<Record<string, OpenApiExample | OpenApiReference | undefined>>;
-  readonly schema?: OpenApiSchema | OpenApiReference | boolean;
+  readonly schema?: OpenApiSchema | OpenApiReference | KajoSchema | boolean;
   readonly [key: string]: unknown;
 }
 
@@ -71,27 +84,40 @@ export interface OpenApiReference {
 
 export interface OpenApiRoute {
   readonly method: OpenApiMethod;
+  readonly openApiPath: string;
+  readonly operation: OpenApiOperation;
   readonly operationId: string;
   readonly path: string;
   readonly response: Response;
+  readonly source: "kajo" | "openapi";
 }
 
 export class OpenApiOperationRegistry {
-  readonly #identities = new Set<string>();
-  readonly #operationIds = new Set<string>();
+  readonly #byIdentity = new Map<string, OpenApiRoute>();
+  readonly #byOperationId = new Map<string, OpenApiRoute>();
+  readonly #documents: OpenApiDocument[] = [];
 
-  register(routes: readonly OpenApiRoute[]): void {
+  register(
+    routes: readonly OpenApiRoute[],
+    options: { readonly document?: OpenApiDocument; readonly replace?: boolean } = {},
+  ): void {
     const identities = new Set<string>();
     const operationIds = new Set<string>();
 
     for (const route of routes) {
       const identity = `${route.method} ${route.path}`;
+      const existingIdentity = this.#byIdentity.get(identity);
+      const existingOperation = this.#byOperationId.get(route.operationId);
 
-      if (this.#identities.has(identity) || identities.has(identity)) {
+      if ((!options.replace && existingIdentity) || identities.has(identity)) {
         throw new TypeError(`OpenAPI operation "${identity}" is already registered.`);
       }
 
-      if (this.#operationIds.has(route.operationId) || operationIds.has(route.operationId)) {
+      if (
+        (!options.replace && existingOperation) ||
+        (existingOperation && existingOperation !== existingIdentity) ||
+        operationIds.has(route.operationId)
+      ) {
         throw new TypeError(`OpenAPI operationId "${route.operationId}" is already registered.`);
       }
 
@@ -99,13 +125,64 @@ export class OpenApiOperationRegistry {
       operationIds.add(route.operationId);
     }
 
-    for (const identity of identities) {
-      this.#identities.add(identity);
+    for (const route of routes) {
+      const identity = `${route.method} ${route.path}`;
+      const replaced = this.#byIdentity.get(identity);
+
+      if (replaced) {
+        this.#byOperationId.delete(replaced.operationId);
+      }
+
+      this.#byIdentity.set(identity, route);
+      this.#byOperationId.set(route.operationId, route);
     }
 
-    for (const operationId of operationIds) {
-      this.#operationIds.add(operationId);
+    if (options.document) {
+      this.#documents.push(options.document);
     }
+  }
+
+  document(info?: OpenApiInfo): OpenApiDocument {
+    if (this.#documents.length > 1) {
+      throw new TypeError("Cannot export more than one imported OpenAPI document yet.");
+    }
+
+    const imported = this.#documents[0];
+    const documentInfo = info ?? imported?.info;
+
+    if (!documentInfo) {
+      throw new TypeError("OpenAPI export requires an info object with a title and version.");
+    }
+
+    const paths: Record<string, Record<string, unknown>> = Object.fromEntries(
+      Object.entries(imported?.paths ?? {}).flatMap(([path, pathItem]) =>
+        pathItem ? [[path, isReference(pathItem) ? pathItem : { ...pathItem }]] : [],
+      ),
+    );
+
+    for (const route of this.#byIdentity.values()) {
+      if (route.source === "openapi") {
+        continue;
+      }
+
+      const existing = paths[route.openApiPath];
+
+      if (existing && isReference(existing)) {
+        throw new TypeError(
+          `Cannot replace operation in referenced OpenAPI path item "${route.openApiPath}".`,
+        );
+      }
+
+      const pathItem = (paths[route.openApiPath] ??= {});
+      pathItem[route.method.toLowerCase()] = route.operation;
+    }
+
+    return {
+      ...imported,
+      info: documentInfo,
+      openapi: imported?.openapi ?? "3.1.0",
+      paths: paths as OpenApiDocument["paths"],
+    };
   }
 }
 
@@ -156,14 +233,67 @@ export function compileOpenApiRoutes(document: OpenApiDocument): OpenApiRoute[] 
       registered.add(identity);
       routes.push({
         method: routeMethod,
+        openApiPath,
+        operation: normalizeOperation(operation),
         operationId,
         path,
         response: exampleResponse(operation, identity, references),
+        source: "openapi",
       });
     }
   }
 
   return routes;
+}
+
+export function compileOpenApiRouteContract(
+  method: OpenApiMethod,
+  path: string,
+  contract: OpenApiRouteContract,
+): OpenApiRoute {
+  const openApiPath = toOpenApiPath(path);
+  const methodName = method.toLowerCase() as (typeof OPENAPI_METHODS)[number];
+  const routes = compileOpenApiRoutes({
+    openapi: "3.1.0",
+    paths: {
+      [openApiPath]: {
+        [methodName]: contract,
+      },
+    },
+  });
+
+  return { ...routes[0]!, source: "kajo" };
+}
+
+function normalizeOperation(operation: OpenApiOperation): OpenApiOperation {
+  return {
+    ...operation,
+    responses: Object.fromEntries(
+      Object.entries(operation.responses).map(([status, response]) => [
+        status,
+        response && !isReference(response)
+          ? {
+              ...response,
+              content: response.content
+                ? Object.fromEntries(
+                    Object.entries(response.content).map(([mediaType, media]) => [
+                      mediaType,
+                      media?.schema && isKajoSchema(media.schema)
+                        ? {
+                            ...media,
+                            schema: media.schema["~standard"].jsonSchema.output({
+                              target: "draft-2020-12",
+                            }),
+                          }
+                        : media,
+                    ]),
+                  )
+                : undefined,
+            }
+          : response,
+      ]),
+    ),
+  };
 }
 
 function operationIdFor(
@@ -202,6 +332,17 @@ function toKajoPath(path: string): string {
   }
 
   return converted;
+}
+
+function toOpenApiPath(path: string): string {
+  if (path.includes("*")) {
+    throw new TypeError(`OpenAPI route contract "${path}" cannot contain a wildcard.`);
+  }
+
+  return path
+    .split("/")
+    .map((segment) => (segment.startsWith(":") ? `{${segment.slice(1)}}` : segment))
+    .join("/");
 }
 
 function exampleResponse(
@@ -325,7 +466,7 @@ const FORMAT_VALUES: Readonly<Record<string, string>> = {
 };
 
 function generateSchemaValue(
-  schema: OpenApiSchema | OpenApiReference | boolean,
+  schema: OpenApiSchema | OpenApiReference | KajoSchema | boolean,
   operation: string,
   references: LocalReferenceResolver,
   active: Set<object>,
@@ -338,7 +479,9 @@ function generateSchemaValue(
     throw new TypeError(`OpenAPI schema for "${operation}" is "false" and permits no values.`);
   }
 
-  const resolved = references.resolve(schema, `schema for "${operation}"`) as OpenApiSchema;
+  const resolved = isKajoSchema(schema)
+    ? (schema["~standard"].jsonSchema.output({ target: "draft-2020-12" }) as OpenApiSchema)
+    : (references.resolve(schema, `schema for "${operation}"`) as OpenApiSchema);
 
   if (active.has(resolved)) {
     throw new TypeError(
@@ -539,6 +682,20 @@ class LocalReferenceResolver {
 
 function isReference(value: object): value is OpenApiReference {
   return "$ref" in value && typeof value.$ref === "string";
+}
+
+function isKajoSchema(value: unknown): value is KajoSchema {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const standard = Reflect.get(value, "~standard");
+  return (
+    typeof standard === "object" &&
+    standard !== null &&
+    typeof Reflect.get(standard, "validate") === "function" &&
+    typeof Reflect.get(Reflect.get(standard, "jsonSchema") ?? {}, "output") === "function"
+  );
 }
 
 function decodePointerToken(token: string, reference: string, location: string): string {

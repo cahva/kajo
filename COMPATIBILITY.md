@@ -130,12 +130,14 @@ not as a list of fixes to port.
 ## Remaining work
 
 The Mirage-style core is implemented and tested. The remaining work is the
-OpenAPI convenience layer and the first release:
+OpenAPI contract layer and the first release:
 
-1. Expand the OpenAPI 3.1 route adapter with external `$ref` resolution and
-   request validation.
+1. Add request contracts and validation, model-backed `resource()` contract
+   generation, and external `$ref` resolution.
 2. Publish the first release.
 
 OpenAPI documents can register deterministic example-backed routes, generate
-response bodies from JSON Schemas, and resolve local JSON Pointers; explicit
-Kajo routes remain the highest-precedence source of behavior.
+response bodies from JSON Schemas, resolve local JSON Pointers, connect
+operation handlers to Kajo data, and merge Kajo route contracts into an
+exported document. Explicit Kajo routes remain the highest-precedence source of
+behavior.

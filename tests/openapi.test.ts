@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
+import * as z from "zod";
 import {
   compileOpenApiRoutes,
   createServer,
@@ -206,6 +207,142 @@ describe("OpenAPI", () => {
     });
 
     expect(route?.operationId).toBe("getTasksTaskIdComments");
+  });
+
+  test("exports Kajo route contracts with Standard Schema responses", async () => {
+    const Task = z.object({
+      id: z.string(),
+      title: z.string().min(1),
+    });
+    const server = createServer({
+      intercept: false,
+      routes() {
+        this.namespace = "/api";
+        this.get(
+          "/tasks/:taskId",
+          (_schema, request) => ({
+            id: request.params.taskId,
+            title: "Contracted task",
+          }),
+          {
+            openapi: {
+              operationId: "getTask",
+              responses: {
+                "200": {
+                  content: {
+                    "application/json": {
+                      schema: Task,
+                    },
+                  },
+                  description: "A task",
+                },
+              },
+            },
+          },
+        );
+      },
+    });
+
+    const response = await server.handle(new Request("https://example.test/api/tasks/42"));
+    const exported = server.openApiDocument({
+      title: "Task API",
+      version: "1.0.0",
+    });
+
+    await expect(response?.json()).resolves.toEqual({
+      id: "42",
+      title: "Contracted task",
+    });
+    expect(exported).toMatchObject({
+      info: {
+        title: "Task API",
+        version: "1.0.0",
+      },
+      openapi: "3.1.0",
+      paths: {
+        "/api/tasks/{taskId}": {
+          get: {
+            operationId: "getTask",
+            responses: {
+              "200": {
+                content: {
+                  "application/json": {
+                    schema: {
+                      properties: {
+                        id: { type: "string" },
+                        title: { minLength: 1, type: "string" },
+                      },
+                      required: ["id", "title"],
+                      type: "object",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(exported)).not.toContain("~standard");
+  });
+
+  test("merges Kajo contracts into an imported document using route precedence", async () => {
+    const server = createServer({
+      intercept: false,
+      openapi: {
+        ...document,
+        "x-origin": "backend",
+      },
+      routes() {
+        this.get("/tasks/:taskId", () => ({ source: "kajo" }), {
+          openapi: {
+            operationId: "findTask",
+            responses: {
+              "200": {
+                content: {
+                  "application/json": {
+                    example: { source: "kajo" },
+                  },
+                },
+                description: "Kajo task",
+              },
+            },
+          },
+        });
+      },
+    });
+
+    const response = await server.handle(new Request("https://example.test/tasks/1"));
+    const exported = server.openApiDocument();
+
+    await expect(response?.json()).resolves.toEqual({ source: "kajo" });
+    expect(exported.info).toEqual(document.info);
+    expect(exported["x-origin"]).toBe("backend");
+    expect((exported.paths["/tasks/{taskId}"] as OpenApiPathItem).get?.operationId).toBe(
+      "findTask",
+    );
+    expect((exported.paths["/tasks"] as OpenApiPathItem).post?.operationId).toBe("createTask");
+  });
+
+  test("requires export metadata and rejects wildcard contracts", () => {
+    const server = createServer({ intercept: false });
+
+    expect(() => server.openApiDocument()).toThrow(
+      "OpenAPI export requires an info object with a title and version.",
+    );
+    expect(() =>
+      createServer({
+        intercept: false,
+        routes() {
+          this.get("/files/*path", [], {
+            openapi: {
+              operationId: "getFile",
+              responses: { "200": { description: "File" } },
+            },
+          });
+        },
+      }),
+    ).toThrow('OpenAPI route contract "/files/*path" cannot contain a wildcard.');
   });
 
   test("supports loading additional documents after construction", async () => {

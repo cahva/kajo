@@ -88,6 +88,8 @@ and this project adheres to
   example using one frontend and Kajo server configuration.
 - OpenAPI operation registries and `operationId` handlers that connect imported
   contracts to seeded Kajo data while retaining generated fallbacks.
+- OpenAPI contracts on Kajo-defined routes and combined document export, with
+  Standard Schema responses converted to JSON Schema.
 
 ### Changed
 

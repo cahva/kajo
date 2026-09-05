@@ -1,5 +1,6 @@
 import type { DatabaseData } from "./database.ts";
 import type { ModelRegistry, Schema } from "./model.ts";
+import type { OpenApiRouteContract } from "./openapi.ts";
 
 /**
  * An expected HTTP failure that route handlers can return by throwing.
@@ -83,4 +84,6 @@ export interface RouteOptions {
   readonly timing?: number;
   /** Override the response status. */
   readonly status?: number;
+  /** Describe this route for OpenAPI export. */
+  readonly openapi?: OpenApiRouteContract;
 }

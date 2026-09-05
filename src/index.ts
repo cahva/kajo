@@ -90,6 +90,7 @@ export { compileOpenApiRoutes } from "./openapi.ts";
 export type {
   OpenApiDocument,
   OpenApiExample,
+  OpenApiInfo,
   OpenApiMediaType,
   OpenApiMethod,
   OpenApiOperation,
@@ -97,6 +98,7 @@ export type {
   OpenApiReference,
   OpenApiResponse,
   OpenApiRoute,
+  OpenApiRouteContract,
   OpenApiSchema,
 } from "./openapi.ts";
 export { createServer, Server } from "./server.ts";

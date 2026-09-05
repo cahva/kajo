@@ -429,6 +429,37 @@ and duplicate method/path registrations fail when the document is loaded.
 Explicit routes declared in `routes()` are registered later and retain highest
 precedence.
 
+Kajo-defined routes can carry an OpenAPI contract. Standard Schema response
+schemas are converted to JSON Schema when the document is exported:
+
+```ts
+this.get("/tasks/:taskId", getTask, {
+  openapi: {
+    operationId: "getTask",
+    responses: {
+      "200": {
+        description: "A task",
+        content: {
+          "application/json": {
+            schema: TaskSchema,
+          },
+        },
+      },
+    },
+  },
+});
+
+const document = server.openApiDocument({
+  title: "Task API",
+  version: "1.0.0",
+});
+```
+
+Namespaces and path parameters are reflected in the exported path. A contracted
+Kajo route replaces an imported operation at the same method and path, matching
+runtime route precedence. Export currently supports one imported base document
+plus any number of Kajo-defined contracts.
+
 Operations without examples generate a deterministic body from the response
 JSON Schema. Each schema node uses `example`, `examples`, `const`, `default`,
 or `enum` when present, merges `allOf`, picks the first `oneOf` or `anyOf`
@@ -438,10 +469,11 @@ fixed constant for known string formats, the `minimum` or `0` for numbers,
 declared property for objects. Unconstrained schemas produce `{}`, and
 recursive schemas require an explicit example.
 
-The first increment supports inline examples, locally referenced examples, and
-schema-generated values with concrete, `2XX`, or `default` success responses.
+The OpenAPI integration supports inline examples, locally referenced examples,
+schema-generated values, operation handlers, and exporting route contracts.
 Local JSON Pointer references can target path items, responses, examples, and
-schemas. External `$ref` resolution and request validation are planned next.
+schemas. External `$ref` resolution, request contracts, and validation are
+planned next.
 
 Kajo owns same-origin routes by default in browsers. Set `urlPrefix` for an
 external API; requests outside that origin and namespace are ignored
