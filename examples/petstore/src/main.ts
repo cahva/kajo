@@ -22,11 +22,13 @@ const result = requiredElement("result");
 const resultTitle = requiredElement("result-title");
 const mode = requiredElement("mode");
 const form = requiredElement<HTMLFormElement>("pet-form");
+const petLookup = requiredElement<HTMLFormElement>("pet-lookup");
+const petIdInput = requiredElement<HTMLInputElement>("pet-id");
 const resultMethod = requiredElement("result-method");
 const resultPath = requiredElement("result-path");
 const resultStatus = requiredElement("result-status");
 const resultPreview = requiredElement("result-preview");
-const operationButtons = [...document.querySelectorAll<HTMLButtonElement>(".operation")];
+const operations = [...document.querySelectorAll<HTMLElement>("[data-operation]")];
 
 requiredElement("available").addEventListener("click", (event) => {
   void show(
@@ -38,10 +40,11 @@ requiredElement("available").addEventListener("click", (event) => {
     () => request<FindPetsResponse>("/v2/pet/findByStatus?status=available"),
   );
 });
-requiredElement("pet").addEventListener("click", (event) => {
-  void show(event, "Pet 1", "Implemented", "GET", "/v2/pet/1", () =>
-    request<GetPetResponse>("/v2/pet/1"),
-  );
+petLookup.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const id = petIdInput.value;
+  const path = `/v2/pet/${encodeURIComponent(id)}`;
+  void show(event, `Pet ${id}`, "Implemented", "GET", path, () => request<GetPetResponse>(path));
 });
 requiredElement("order").addEventListener("click", (event) => {
   void show(event, "Order 1", "Implemented", "GET", "/v2/store/order/1", () =>
@@ -62,13 +65,19 @@ form.addEventListener("submit", (event) => {
     photoUrls: [],
     status: "available",
   };
-  void show(event, "Created pet", "Implemented", "POST", "/v2/pet", () =>
-    request<Pet>("/v2/pet", {
+  void show(event, "Created pet", "Implemented", "POST", "/v2/pet", async () => {
+    const response = await request<Pet>("/v2/pet", {
       body: JSON.stringify(pet),
       headers: { "content-type": "application/json" },
       method: "POST",
-    }),
-  );
+    });
+
+    if (response.body.id !== undefined) {
+      petIdInput.value = String(response.body.id);
+    }
+
+    return response;
+  });
 });
 
 void show(
@@ -89,14 +98,14 @@ async function show(
   load: () => Promise<ApiResult>,
 ): Promise<void> {
   const selected = event?.currentTarget;
-  const selectedButton =
-    selected instanceof HTMLButtonElement
+  const selectedOperation =
+    selected instanceof HTMLElement
       ? selected
       : event === undefined
         ? requiredElement("available")
         : undefined;
-  operationButtons.forEach((button) =>
-    button.classList.toggle("active", button === selectedButton),
+  operations.forEach((operation) =>
+    operation.classList.toggle("active", operation === selectedOperation),
   );
   resultTitle.textContent = title;
   mode.textContent = behavior;

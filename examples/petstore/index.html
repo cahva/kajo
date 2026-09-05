@@ -33,24 +33,31 @@
             <span>6 implemented</span>
           </div>
 
-          <button id="available" class="operation active">
+          <button id="available" class="operation active" data-operation>
             <span class="method get">GET</span>
             <span><strong>Available pets</strong><small>/pet/findByStatus</small></span>
           </button>
-          <button id="pet" class="operation">
-            <span class="method get">GET</span>
-            <span><strong>Pet by ID</strong><small>/pet/{petId}</small></span>
-          </button>
-          <button id="order" class="operation">
+          <form id="pet-lookup" class="lookup-operation" data-operation>
+            <div class="create-heading">
+              <span class="method get">GET</span>
+              <span><strong>Pet by ID</strong><small>/pet/{petId}</small></span>
+            </div>
+            <label for="pet-id">Pet ID</label>
+            <div class="input-row">
+              <input id="pet-id" name="petId" value="1" required />
+              <button type="submit">Fetch</button>
+            </div>
+          </form>
+          <button id="order" class="operation" data-operation>
             <span class="method get">GET</span>
             <span><strong>Order by ID</strong><small>/store/order/{orderId}</small></span>
           </button>
-          <button id="inventory" class="operation generated">
+          <button id="inventory" class="operation generated" data-operation>
             <span class="method get">GET</span>
             <span><strong>Inventory</strong><small>Schema-generated fallback</small></span>
           </button>
 
-          <form id="pet-form" class="create-operation">
+          <form id="pet-form" class="create-operation" data-operation>
             <div class="create-heading">
               <span class="method post">POST</span>
               <span><strong>Add a pet</strong><small>/pet</small></span>

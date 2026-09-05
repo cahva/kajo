@@ -218,14 +218,24 @@ h1 {
   background: #efbb8d;
 }
 
-.create-operation {
+.create-operation,
+.lookup-operation {
   display: grid;
   gap: 11px;
-  margin-top: 13px;
   padding: 17px;
   background: rgb(255 255 255 / 5%);
-  border-top: 1px solid rgb(255 255 255 / 9%);
+  border: 1px solid transparent;
   border-radius: 12px;
+}
+
+.create-operation {
+  margin-top: 13px;
+  border-top-color: rgb(255 255 255 / 9%);
+}
+
+.lookup-operation.active {
+  background: #26372d;
+  border-color: rgb(255 255 255 / 8%);
 }
 
 .create-heading {
@@ -233,7 +243,8 @@ h1 {
   margin-bottom: 5px;
 }
 
-.create-operation label {
+.create-operation label,
+.lookup-operation label {
   color: #9fb1a5;
   font-size: 0.7rem;
   font-weight: 700;
@@ -269,6 +280,11 @@ h1 {
   border-radius: 8px;
   font-size: 0.8rem;
   font-weight: 800;
+}
+
+.lookup-operation .input-row button {
+  color: #173421;
+  background: #a9dab9;
 }
 
 .response {
