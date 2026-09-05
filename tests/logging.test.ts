@@ -13,16 +13,20 @@ describe("request logging", () => {
       },
     });
 
-    const response = await server.handle(new Request("https://example.test/api/tasks/1"));
+    const response = await server.handle(
+      new Request("https://example.test/api/tasks/1?status=available"),
+    );
 
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       method: "GET",
+      params: { id: "1" },
+      queryParams: { status: "available" },
       requestBody: "",
       response,
       route: "/api/tasks/:id",
       type: "handled",
-      url: "https://example.test/api/tasks/1",
+      url: "https://example.test/api/tasks/1?status=available",
     });
     expect(entries[0]?.type === "handled" && entries[0].durationMs).toEqual(expect.any(Number));
   });
@@ -49,7 +53,7 @@ describe("request logging", () => {
         /^\[Kajo\] 200 GET https:\/\/example\.test\/tasks → \/tasks \(\d+\.\dms\)$/,
       ),
     );
-    expect(log).toHaveBeenCalledWith("Request body", "(empty)");
+    expect(log).not.toHaveBeenCalledWith("Request body", expect.anything());
   });
 
   test("shows parsed JSON request bodies in console diagnostics", async () => {
@@ -65,7 +69,7 @@ describe("request logging", () => {
     });
 
     await server.handle(
-      new Request("https://example.test/tasks/1", {
+      new Request("https://example.test/tasks/1?source=browser", {
         body: JSON.stringify({ status: "done" }),
         headers: { "content-type": "application/json" },
         method: "PATCH",
@@ -73,6 +77,8 @@ describe("request logging", () => {
     );
 
     expect(log).toHaveBeenCalledWith("Request body", { status: "done" });
+    expect(log).toHaveBeenCalledWith("Path parameters", { id: "1" });
+    expect(log).toHaveBeenCalledWith("Query parameters", { source: "browser" });
   });
 
   test("reports route handler errors before rethrowing them", async () => {

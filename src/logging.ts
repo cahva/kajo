@@ -13,6 +13,10 @@ export interface HandledRequestLog extends RequestLogBase {
   readonly durationMs: number;
   /** The raw request body. */
   readonly requestBody: string;
+  /** Dynamic path parameters matched by the route. */
+  readonly params: Readonly<Record<string, string>>;
+  /** Parsed query string values. */
+  readonly queryParams: Readonly<Record<string, string>>;
   /** The response returned by Kajo. */
   readonly response: Response;
   /** The route pattern that handled the request. */
@@ -35,6 +39,10 @@ export interface ErroredRequestLog extends RequestLogBase {
   readonly error: unknown;
   /** The raw request body. */
   readonly requestBody: string;
+  /** Dynamic path parameters matched by the route. */
+  readonly params: Readonly<Record<string, string>>;
+  /** Parsed query string values. */
+  readonly queryParams: Readonly<Record<string, string>>;
   /** The route pattern whose handler failed. */
   readonly route: string;
 }
@@ -70,7 +78,7 @@ export function logRequestToConsole(entry: RequestLog): void {
       entry.error,
       entry.request,
     );
-    console.log("Request body", formatBody(entry.requestBody));
+    logRequestData(entry);
     return;
   }
 
@@ -78,9 +86,23 @@ export function logRequestToConsole(entry: RequestLog): void {
     `[Kajo] ${entry.response.status} ${entry.method} ${entry.url} → ${entry.route} (${formatDuration(entry.durationMs)})`,
   );
   console.log("Response", entry.response);
-  console.log("Request body", formatBody(entry.requestBody));
+  logRequestData(entry);
   console.log("Request", entry.request);
   console.groupEnd();
+}
+
+function logRequestData(entry: HandledRequestLog | ErroredRequestLog): void {
+  if (Object.keys(entry.params).length > 0) {
+    console.log("Path parameters", entry.params);
+  }
+
+  if (Object.keys(entry.queryParams).length > 0) {
+    console.log("Query parameters", entry.queryParams);
+  }
+
+  if (entry.requestBody) {
+    console.log("Request body", formatBody(entry.requestBody));
+  }
 }
 
 function formatBody(body: string): unknown {

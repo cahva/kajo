@@ -565,6 +565,8 @@ export class Server<
         durationMs: now() - startedAt,
         error,
         method: request.method.toUpperCase(),
+        params: routeRequest.params,
+        queryParams: routeRequest.queryParams,
         request,
         requestBody: routeRequest.requestBody,
         route: match.route.path,
@@ -577,6 +579,8 @@ export class Server<
     this.#log({
       durationMs: now() - startedAt,
       method: request.method.toUpperCase(),
+      params: routeRequest.params,
+      queryParams: routeRequest.queryParams,
       request,
       requestBody: routeRequest.requestBody,
       response,
