@@ -244,7 +244,10 @@ export class OpenApiOperationRegistry {
 /**
  * Compile example-backed operations from an OpenAPI 3.1 document into Kajo routes.
  */
-export function compileOpenApiRoutes(document: OpenApiDocument): OpenApiRoute[] {
+export function compileOpenApiRoutes(
+  document: OpenApiDocument,
+  options: { readonly generateResponses?: boolean } = {},
+): OpenApiRoute[] {
   if (!/^3\.1(?:\.|$)/.test(document.openapi)) {
     throw new TypeError(
       `Kajo supports OpenAPI 3.1 documents; received version "${document.openapi}".`,
@@ -289,10 +292,13 @@ export function compileOpenApiRoutes(document: OpenApiDocument): OpenApiRoute[] 
       routes.push({
         method: routeMethod,
         openApiPath,
-        operation: normalizeOperation(operation),
+        operation: normalizeOperation(operation, operationId),
         operationId,
         path,
-        response: exampleResponse(operation, identity, references, routeMethod),
+        response:
+          options.generateResponses === false
+            ? new Response(null, { status: 204 })
+            : exampleResponse(operation, identity, references, routeMethod),
         source: "openapi",
       });
     }
@@ -310,14 +316,17 @@ export function compileOpenApiRouteContract(
   assertSupportedRequestContract(completeContract, path);
   const openApiPath = toOpenApiPath(path);
   const methodName = method.toLowerCase() as (typeof OPENAPI_METHODS)[number];
-  const routes = compileOpenApiRoutes({
-    openapi: "3.1.0",
-    paths: {
-      [openApiPath]: {
-        [methodName]: completeContract,
+  const routes = compileOpenApiRoutes(
+    {
+      openapi: "3.1.0",
+      paths: {
+        [openApiPath]: {
+          [methodName]: completeContract,
+        },
       },
     },
-  });
+    { generateResponses: false },
+  );
 
   return { ...routes[0]!, source: "kajo" };
 }
@@ -391,7 +400,7 @@ function assertSupportedRequestContract(contract: OpenApiRouteContract, path: st
   }
 }
 
-function normalizeOperation(operation: OpenApiOperation): OpenApiOperation {
+function normalizeOperation(operation: OpenApiOperation, operationId: string): OpenApiOperation {
   return {
     ...operation,
     parameters: operation.parameters?.map((parameter) =>
@@ -399,10 +408,14 @@ function normalizeOperation(operation: OpenApiOperation): OpenApiOperation {
         ? parameter
         : {
             ...parameter,
-            schema: normalizeSchema(parameter.schema, "input"),
+            schema: normalizeSchema(
+              parameter.schema,
+              "input",
+              `${operationId}:parameter:${parameter.in}:${parameter.name}`,
+            ),
           },
     ),
-    requestBody: normalizeRequestBody(operation.requestBody),
+    requestBody: normalizeRequestBody(operation.requestBody, operationId),
     responses: Object.fromEntries(
       Object.entries(operation.responses).map(([status, response]) => [
         status,
@@ -416,7 +429,11 @@ function normalizeOperation(operation: OpenApiOperation): OpenApiOperation {
                       media
                         ? {
                             ...media,
-                            schema: normalizeSchema(media.schema, "output"),
+                            schema: normalizeSchema(
+                              media.schema,
+                              "output",
+                              `${operationId}:response:${status}:${mediaType}`,
+                            ),
                           }
                         : media,
                     ]),
@@ -431,6 +448,7 @@ function normalizeOperation(operation: OpenApiOperation): OpenApiOperation {
 
 function normalizeRequestBody(
   requestBody: OpenApiOperation["requestBody"],
+  operationId: string,
 ): OpenApiRequestBody | OpenApiReference | undefined {
   if (!requestBody) {
     return undefined;
@@ -440,7 +458,7 @@ function normalizeRequestBody(
     return {
       content: {
         "application/json": {
-          schema: normalizeSchema(requestBody, "input"),
+          schema: normalizeSchema(requestBody, "input", `${operationId}:request:application/json`),
         },
       },
       required: true,
@@ -459,7 +477,7 @@ function normalizeRequestBody(
         media
           ? {
               ...media,
-              schema: normalizeSchema(media.schema, "input"),
+              schema: normalizeSchema(media.schema, "input", `${operationId}:request:${mediaType}`),
             }
           : media,
       ]),
@@ -470,8 +488,33 @@ function normalizeRequestBody(
 function normalizeSchema(
   schema: OpenApiMediaType["schema"],
   mode: "input" | "output",
+  resourceName: string,
 ): OpenApiMediaType["schema"] {
-  return isKajoSchema(schema) ? standardJsonSchema(schema, mode) : schema;
+  if (!isKajoSchema(schema)) {
+    return schema;
+  }
+
+  const converted = standardJsonSchema(schema, mode);
+  return hasRootReference(converted) && !("$id" in converted)
+    ? {
+        ...converted,
+        $id: `urn:kajo:${encodeURIComponent(resourceName)}`,
+      }
+    : converted;
+}
+
+function hasRootReference(value: unknown, seen = new Set<object>()): boolean {
+  if (typeof value !== "object" || value === null || seen.has(value)) {
+    return false;
+  }
+
+  seen.add(value);
+
+  if ("$ref" in value && typeof value.$ref === "string" && value.$ref.startsWith("#")) {
+    return true;
+  }
+
+  return Object.values(value).some((entry) => hasRootReference(entry, seen));
 }
 
 export async function validateOpenApiRequest(
@@ -628,19 +671,29 @@ function selectRequestMediaType(
   requestBody: OpenApiRequestBody,
   contentType: string | undefined,
 ): { readonly type: string; readonly value: OpenApiMediaType } | undefined {
-  if (contentType && requestBody.content[contentType]) {
-    return { type: contentType, value: requestBody.content[contentType] };
-  }
-
   if (!contentType) {
     return selectMediaType(requestBody.content);
   }
 
-  return undefined;
+  const actual = normalizeMediaType(contentType);
+  const selected = Object.entries(requestBody.content)
+    .filter(
+      (entry): entry is [string, OpenApiMediaType] =>
+        entry[1] !== undefined && mediaTypeMatches(entry[0], actual),
+    )
+    .sort(([left], [right]) => mediaRangeSpecificity(right) - mediaRangeSpecificity(left))[0];
+
+  return selected ? { type: actual, value: selected[1] } : undefined;
 }
 
 function parameterValue(parameter: OpenApiParameter, request: KajoRequest): unknown {
   const url = new URL(request.url);
+  const schema = parameterJsonSchema(parameter.schema);
+
+  if (schemaHasType(schema, "object")) {
+    return objectParameterValue(parameter, request, url, schema);
+  }
+
   let values: string[];
 
   switch (parameter.in) {
@@ -669,7 +722,7 @@ function parameterValue(parameter: OpenApiParameter, request: KajoRequest): unkn
     return undefined;
   }
 
-  if (!isArraySchema(parameter.schema)) {
+  if (!schemaHasType(schema, "array")) {
     return values.at(-1);
   }
 
@@ -677,19 +730,79 @@ function parameterValue(parameter: OpenApiParameter, request: KajoRequest): unkn
   return explode ? values : values.flatMap((value) => value.split(","));
 }
 
-function isArraySchema(schema: OpenApiParameter["schema"]): boolean {
-  if (!isKajoSchema(schema)) {
-    return (
-      typeof schema === "object" &&
-      schema !== null &&
-      !isReference(schema) &&
-      (schema.type === "array" || (Array.isArray(schema.type) && schema.type.includes("array")))
-    );
+function objectParameterValue(
+  parameter: OpenApiParameter,
+  request: KajoRequest,
+  url: URL,
+  schema: OpenApiSchema,
+): Record<string, unknown> | undefined {
+  const explode = parameter.explode ?? (parameter.in === "query" || parameter.in === "cookie");
+
+  if (explode && (parameter.in === "query" || parameter.in === "cookie")) {
+    const object: Record<string, unknown> = {};
+
+    for (const [name, property] of Object.entries(schema.properties ?? {})) {
+      const values =
+        parameter.in === "query"
+          ? url.searchParams.getAll(name)
+          : [requestCookie(request.original.headers.get("cookie"), name)].filter(
+              (value): value is string => value !== undefined,
+            );
+
+      if (values.length > 0) {
+        object[name] = schemaHasType(parameterJsonSchema(property), "array")
+          ? values
+          : values.at(-1);
+      }
+    }
+
+    return Object.keys(object).length > 0 ? object : undefined;
   }
 
-  const jsonSchema = standardJsonSchema(schema, "input");
-  const type = Reflect.get(jsonSchema, "type");
-  return type === "array" || (Array.isArray(type) && type.includes("array"));
+  const serialized =
+    parameter.in === "query"
+      ? url.searchParams.get(parameter.name)
+      : parameter.in === "header"
+        ? request.original.headers.get(parameter.name)
+        : parameter.in === "cookie"
+          ? requestCookie(request.original.headers.get("cookie"), parameter.name)
+          : request.params[parameter.name];
+
+  if (serialized === null || serialized === undefined) {
+    return undefined;
+  }
+
+  const parts = serialized.split(",");
+  const entries = explode
+    ? parts.flatMap((part) => {
+        const separator = part.indexOf("=");
+        return separator === -1 ? [] : [[part.slice(0, separator), part.slice(separator + 1)]];
+      })
+    : Array.from({ length: Math.floor(parts.length / 2) }, (_, index) => [
+        parts[index * 2]!,
+        parts[index * 2 + 1]!,
+      ]);
+
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function parameterJsonSchema(
+  schema: OpenApiParameter["schema"] | undefined,
+): OpenApiSchema | undefined {
+  if (isKajoSchema(schema)) {
+    return standardJsonSchema(schema, "input");
+  }
+
+  return typeof schema === "object" && schema !== null && !isReference(schema) ? schema : undefined;
+}
+
+function schemaHasType(
+  schema: OpenApiSchema | undefined,
+  expected: string,
+): schema is OpenApiSchema {
+  return (
+    schema?.type === expected || (Array.isArray(schema?.type) && schema.type.includes(expected))
+  );
 }
 
 function requestCookie(header: string | null, name: string): string | undefined {
@@ -1172,15 +1285,43 @@ function decodePointerToken(token: string, reference: string, location: string):
 }
 
 function mediaTypePriority(mediaType: string): number {
-  if (mediaType === "application/json") {
+  const normalized = normalizeMediaType(mediaType);
+
+  if (normalized === "application/json") {
     return 0;
   }
 
-  return mediaType.endsWith("+json") ? 1 : 2;
+  return normalized.endsWith("+json") ? 1 : 2;
 }
 
 function isJsonMediaType(mediaType: string | undefined): boolean {
-  return mediaType === "application/json" || mediaType?.endsWith("+json") === true;
+  if (!mediaType) {
+    return false;
+  }
+
+  const normalized = normalizeMediaType(mediaType);
+  return normalized === "application/json" || normalized.endsWith("+json");
+}
+
+function normalizeMediaType(mediaType: string): string {
+  return mediaType.split(";")[0]!.trim().toLowerCase();
+}
+
+function mediaTypeMatches(range: string, mediaType: string): boolean {
+  const normalizedRange = normalizeMediaType(range);
+
+  if (normalizedRange === "*/*" || normalizedRange === mediaType) {
+    return true;
+  }
+
+  const [rangeType, rangeSubtype] = normalizedRange.split("/");
+  const [mediaTypeType] = mediaType.split("/");
+  return rangeSubtype === "*" && rangeType === mediaTypeType;
+}
+
+function mediaRangeSpecificity(range: string): number {
+  const normalized = normalizeMediaType(range);
+  return normalized === "*/*" ? 0 : normalized.endsWith("/*") ? 1 : 2;
 }
 
 function serializeExampleBody(

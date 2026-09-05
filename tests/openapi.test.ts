@@ -574,6 +574,155 @@ describe("OpenAPI", () => {
     });
   });
 
+  test("matches request media ranges and case-insensitive JSON types", async () => {
+    const Body = z.object({ title: z.string() });
+    const server = createServer({
+      intercept: false,
+      routes() {
+        for (const [path, mediaType] of [
+          ["/problem", "application/*"],
+          ["/case", "application/json"],
+        ] as const) {
+          this.post(path, (_schema, request) => Response.json(request.validated.body), {
+            openapi: {
+              operationId: `post${path}`,
+              requestBody: {
+                content: {
+                  [mediaType]: { schema: Body },
+                },
+                required: true,
+              },
+              responses: { "200": { description: "Body" } },
+            },
+          });
+        }
+      },
+    });
+
+    const ranged = await server.handle(
+      new Request("https://example.test/problem", {
+        body: JSON.stringify({ title: "Problem JSON" }),
+        headers: { "content-type": "application/problem+json" },
+        method: "POST",
+      }),
+    );
+    const caseVariant = await server.handle(
+      new Request("https://example.test/case", {
+        body: JSON.stringify({ title: "Case insensitive" }),
+        headers: { "content-type": "Application/JSON" },
+        method: "POST",
+      }),
+    );
+
+    expect(ranged?.status).toBe(200);
+    await expect(ranged?.json()).resolves.toEqual({ title: "Problem JSON" });
+    expect(caseVariant?.status).toBe(200);
+    await expect(caseVariant?.json()).resolves.toEqual({ title: "Case insensitive" });
+  });
+
+  test("deserializes exploded query and simple path objects", async () => {
+    const Filter = z.object({
+      active: z.string(),
+      role: z.string(),
+    });
+    const Coordinates = z.object({
+      latitude: z.string(),
+      longitude: z.string(),
+    });
+    const server = createServer({
+      intercept: false,
+      routes() {
+        this.get(
+          "/users/:coordinates",
+          (_schema, request) => Response.json(request.validated.parameters),
+          {
+            openapi: {
+              operationId: "findUsers",
+              parameters: [
+                {
+                  in: "query",
+                  name: "filter",
+                  required: true,
+                  schema: Filter,
+                },
+                {
+                  in: "path",
+                  name: "coordinates",
+                  required: true,
+                  schema: Coordinates,
+                },
+              ],
+              responses: { "200": { description: "Users" } },
+            },
+          },
+        );
+      },
+    });
+
+    const response = await server.handle(
+      new Request(
+        "https://example.test/users/latitude,60.17,longitude,24.94?role=admin&active=true",
+      ),
+    );
+
+    await expect(response?.json()).resolves.toEqual({
+      cookie: {},
+      header: {},
+      path: {
+        coordinates: {
+          latitude: "60.17",
+          longitude: "24.94",
+        },
+      },
+      query: {
+        filter: {
+          active: "true",
+          role: "admin",
+        },
+      },
+    });
+  });
+
+  test("gives embedded recursive Standard Schemas their own resource identity", () => {
+    const Node = z.object({
+      get children() {
+        return z.array(Node);
+      },
+      name: z.string(),
+    });
+    const server = createServer({
+      intercept: false,
+      routes() {
+        this.get("/nodes", () => null, {
+          openapi: {
+            operationId: "getNodes",
+            responses: {
+              "200": {
+                content: {
+                  "application/json": { schema: Node },
+                },
+                description: "Nodes",
+              },
+            },
+          },
+        });
+      },
+    });
+    const exported = server.openApiDocument({ title: "Nodes", version: "1.0.0" });
+    const operation = (exported.paths["/nodes"] as OpenApiPathItem).get;
+    expect(operation).toBeDefined();
+    const schema = (
+      operation!.responses["200"] as {
+        content: { "application/json": { schema: OpenApiSchema } };
+      }
+    ).content["application/json"].schema;
+    const children = schema.properties?.children;
+    expect(children).toBeDefined();
+
+    expect(schema.$id).toBe("urn:kajo:getNodes%3Aresponse%3A200%3Aapplication%2Fjson");
+    expect((children as OpenApiSchema).items).toEqual({ $ref: "#" });
+  });
+
   test("reports malformed JSON before invoking the contracted handler", async () => {
     let handled = false;
     const server = createServer({

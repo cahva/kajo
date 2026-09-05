@@ -137,5 +137,9 @@ and this project adheres to
   responder-less GET contracts without requiring `coalesce`.
 - Completed required OpenAPI path parameters automatically, supported `TRACE`,
   and kept generated `HEAD` responses bodyless.
+- Matched request media types case-insensitively with wildcard precedence and
+  deserialized supported OpenAPI object parameter styles.
+- Preserved root-relative references in embedded Standard JSON Schemas by
+  assigning each converted schema its own deterministic resource ID.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD

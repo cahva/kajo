@@ -489,9 +489,12 @@ this.post(
 Contract parameters can use Standard Schemas in `path`, `query`, `header`, and
 `cookie`. Validated and transformed values are available under
 `request.validated.parameters`. Query arrays support repeated values by default
-and comma-separated values with `explode: false`. Invalid requests receive a
-structured `400` response with the operation ID and validation issues; the
-handler is not called.
+and comma-separated values with `explode: false`. Object parameters support
+exploded query/cookie properties and comma-separated simple or form values.
+Request content matching is case-insensitive and honors exact media types,
+`type/*`, and `*/*`, preferring the most specific declaration. Invalid requests
+receive a structured `400` response with the operation ID and validation
+issues; the handler is not called.
 
 Plain JSON Schemas in imported OpenAPI documents are not validated yet. They
 will use a separate JSON Schema engine so Kajo-defined contracts can continue
