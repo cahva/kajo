@@ -6,6 +6,7 @@ import {
   Serializer,
   type OpenApiDocument,
 } from "../../../src/index.ts";
+import { createAjvOpenApiValidator } from "../../../src/openapi/ajv.ts";
 import type { components, operations } from "./petstore.generated.ts";
 
 type Pet = components["schemas"]["Pet"];
@@ -77,6 +78,7 @@ export const server = createServer({
       return schema.orders.create({ ...attributes, id });
     },
   },
+  openapiValidator: createAjvOpenApiValidator(),
   serializers: {
     application: Serializer.extend({ root: false }),
   },

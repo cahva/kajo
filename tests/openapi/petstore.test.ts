@@ -6,6 +6,7 @@ import {
   model,
   type OpenApiDocument,
 } from "../../src/index.ts";
+import { createAjvOpenApiValidator } from "../../src/openapi/ajv.ts";
 
 describe("OpenAPI Petstore compatibility", () => {
   test("compiles every operation in the OpenAPI 3.1 document", async () => {
@@ -39,6 +40,7 @@ describe("OpenAPI Petstore compatibility", () => {
       openapiHandlers: {
         getPetById: (schema, request) => schema.pets.find(request.params.petId),
       },
+      openapiValidator: createAjvOpenApiValidator(),
       urlPrefix: petstore.servers[0]!.url,
     });
 
@@ -51,6 +53,20 @@ describe("OpenAPI Petstore compatibility", () => {
         name: "Kajo",
         status: "available",
       },
+    });
+
+    const invalid = await server.handle(
+      new Request("http://petstore.swagger.io/v2/pet/not-an-integer"),
+    );
+    expect(invalid?.status).toBe(400);
+    await expect(invalid?.json()).resolves.toMatchObject({
+      issues: [
+        {
+          location: "path",
+          name: "petId",
+        },
+      ],
+      operationId: "getPetById",
     });
   });
 });

@@ -162,6 +162,7 @@ export type OpenApiSchemaValidatorResult =
   | { readonly value: unknown };
 
 export interface OpenApiSchemaValidatorContext {
+  readonly document?: OpenApiDocument;
   readonly location: OpenApiParameter["in"] | "body";
   readonly name?: string;
   readonly operationId: string;

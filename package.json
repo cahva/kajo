@@ -17,6 +17,7 @@
   "type": "module",
   "exports": {
     ".": "./dist/index.mjs",
+    "./openapi/ajv": "./dist/openapi/ajv.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -33,7 +34,9 @@
   },
   "dependencies": {
     "@mswjs/interceptors": "^0.42.3",
-    "@standard-schema/spec": "^1.1.0"
+    "@standard-schema/spec": "^1.1.0",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1"
   },
   "devDependencies": {
     "@readme/oas-examples": "^8.2.2",

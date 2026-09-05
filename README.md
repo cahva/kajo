@@ -506,15 +506,20 @@ parameter values, parses the selected request media type, and passes the plain
 JSON Schema and value to the adapter:
 
 ```ts
+import { createAjvOpenApiValidator } from "@cahva/kajo/openapi/ajv";
+
 createServer({
   openapi: document,
-  openapiValidator: {
-    validate(schema, value, context) {
-      return validator.validate(schema, value, context);
-    },
-  },
+  openapiValidator: createAjvOpenApiValidator(),
 });
 ```
+
+The Ajv 2020-12 adapter includes common format validation and lives in a
+separate entry point, so the default Kajo browser bundle does not include Ajv.
+Pass a custom `OpenApiSchemaValidator` when another JSON Schema engine or error
+format is preferred. Ajv compiles dynamic schemas with `new Function()`;
+applications with a strict Content Security Policy should provide a
+CSP-compatible adapter or precompiled validator.
 
 Without an adapter, imported documents preserve their existing generated-mock
 behavior. Kajo-authored Standard Schema contracts continue validating through

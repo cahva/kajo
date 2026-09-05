@@ -86,6 +86,7 @@ export async function validateOpenApiRequest(
     }
 
     const validation = await validatePlainSchema(schema, value, options.validator, {
+      document: options.document,
       location: parameter.in,
       name: parameter.name,
       operationId: contract.operationId,
@@ -198,7 +199,11 @@ async function validateRequestBody(
         resolveSchema(schema, references, `request body for "${operation.operationId}"`),
         value,
         validator,
-        { location: "body", operationId: operation.operationId },
+        {
+          document: references?.document,
+          location: "body",
+          operationId: operation.operationId,
+        },
       );
 
   if (validation && "issues" in validation) {

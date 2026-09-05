@@ -23,6 +23,9 @@ implement `getPetById`, `findPetsByStatus`, `addPet`, `deletePet`,
 button deliberately uses the unimplemented `getInventory` operation to show
 Kajo's schema-generated fallback.
 
+The optional Ajv adapter validates Petstore's imported parameter and request
+body schemas before implemented handlers run.
+
 Kajo request logging is enabled for the example. Open the browser developer
 console to inspect collapsed request and response diagnostics while using the
 workbench.

@@ -103,6 +103,8 @@ and this project adheres to
 - A pluggable JSON Schema validator boundary for imported OpenAPI parameters
   and request bodies, including local reference resolution and primitive
   parameter decoding.
+- An optional `@cahva/kajo/openapi/ajv` adapter with JSON Schema 2020-12,
+  nested local reference, and common format validation.
 
 ### Changed
 
