@@ -1075,6 +1075,94 @@ describe("OpenAPI", () => {
     await expect(plainResponse?.text()).resolves.toBe("string");
   });
 
+  test("generates values that satisfy supported schema constraints", async () => {
+    const Constrained = z.object({
+      labels: z.array(z.string()).min(2).max(2),
+      name: z.string().min(8).max(8),
+      score: z.number().int().min(0.5).max(2),
+    });
+    const [route] = compileOpenApiRoutes({
+      openapi: "3.1.0",
+      paths: {
+        "/constrained": {
+          get: {
+            operationId: "getConstrained",
+            responses: {
+              "200": {
+                content: {
+                  "application/json": { schema: Constrained },
+                },
+                description: "Constrained value",
+              },
+            },
+          },
+        },
+      },
+    });
+    const value: unknown = await route?.response.json();
+    const validation = await Constrained["~standard"].validate(value);
+
+    expect(value).toEqual({
+      labels: ["string", "string"],
+      name: "stringxx",
+      score: 1,
+    });
+    expect(validation.issues).toBeUndefined();
+  });
+
+  test("requires explicit examples for constraints it cannot synthesize safely", () => {
+    expect(() =>
+      compileOpenApiRoutes({
+        openapi: "3.1.0",
+        paths: {
+          "/code": {
+            get: {
+              operationId: "getCode",
+              responses: {
+                "200": {
+                  content: {
+                    "application/json": {
+                      schema: { pattern: "^[A-Z]+$", type: "string" },
+                    },
+                  },
+                  description: "Code",
+                },
+              },
+            },
+          },
+        },
+      }),
+    ).toThrow('OpenAPI schema for "getCode" uses "pattern" and requires an explicit example.');
+    expect(() =>
+      compileOpenApiRoutes({
+        openapi: "3.1.0",
+        paths: {
+          "/integer": {
+            get: {
+              operationId: "getInteger",
+              responses: {
+                "200": {
+                  content: {
+                    "application/json": {
+                      schema: {
+                        maximum: 0.75,
+                        minimum: 0.5,
+                        type: "integer",
+                      },
+                    },
+                  },
+                  description: "Impossible integer",
+                },
+              },
+            },
+          },
+        },
+      }),
+    ).toThrow(
+      'OpenAPI schema for "getInteger" has numeric constraints that require an explicit example.',
+    );
+  });
+
   test("prefers schema value keywords over synthesis", async () => {
     const server = createServer({
       intercept: false,

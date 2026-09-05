@@ -98,16 +98,25 @@ export interface OpenApiSchema {
   readonly enum?: readonly unknown[];
   readonly example?: unknown;
   readonly examples?: readonly unknown[];
+  readonly exclusiveMaximum?: number;
   readonly exclusiveMinimum?: number;
   readonly format?: string;
   readonly items?: OpenApiSchema | OpenApiReference | boolean;
+  readonly maxItems?: number;
+  readonly maxLength?: number;
+  readonly maximum?: number;
+  readonly minItems?: number;
+  readonly minLength?: number;
   readonly minimum?: number;
+  readonly multipleOf?: number;
   readonly oneOf?: readonly (OpenApiSchema | OpenApiReference | boolean)[];
+  readonly pattern?: string;
   readonly properties?: Readonly<
     Record<string, OpenApiSchema | OpenApiReference | boolean | undefined>
   >;
   readonly required?: readonly string[];
   readonly type?: string | readonly string[];
+  readonly uniqueItems?: boolean;
   readonly [key: string]: unknown;
 }
 
@@ -1099,17 +1108,13 @@ function synthesizeSchemaValue(
       return Array.isArray(schema.type) ? null : {};
     }
     case "string": {
-      return typeof schema.format === "string"
-        ? (FORMAT_VALUES[schema.format] ?? "string")
-        : "string";
+      return synthesizeString(schema, operation);
     }
-    case "integer":
     case "number": {
-      if (typeof schema.minimum === "number") {
-        return schema.minimum;
-      }
-
-      return typeof schema.exclusiveMinimum === "number" ? schema.exclusiveMinimum + 1 : 0;
+      return synthesizeNumber(schema, operation, false);
+    }
+    case "integer": {
+      return synthesizeNumber(schema, operation, true);
     }
     case "boolean": {
       return true;
@@ -1118,9 +1123,7 @@ function synthesizeSchemaValue(
       return null;
     }
     case "array": {
-      return schema.items === undefined
-        ? []
-        : [generateSchemaValue(schema.items, operation, references, active)];
+      return synthesizeArray(schema, operation, references, active);
     }
     case "object": {
       const value: Record<string, unknown> = {};
@@ -1139,6 +1142,160 @@ function synthesizeSchemaValue(
       throw new TypeError(`OpenAPI schema for "${operation}" has unsupported type "${type}".`);
     }
   }
+}
+
+function synthesizeString(schema: OpenApiSchema, operation: string): string {
+  if (typeof schema.pattern === "string") {
+    throw new TypeError(
+      `OpenAPI schema for "${operation}" uses "pattern" and requires an explicit example.`,
+    );
+  }
+
+  const minimum = schema.minLength ?? 0;
+  const maximum = schema.maxLength ?? Number.POSITIVE_INFINITY;
+
+  if (
+    minimum > maximum ||
+    minimum < 0 ||
+    !Number.isInteger(minimum) ||
+    (Number.isFinite(maximum) && (maximum < 0 || !Number.isInteger(maximum)))
+  ) {
+    throw new TypeError(`OpenAPI schema for "${operation}" has incompatible string length limits.`);
+  }
+
+  let value =
+    typeof schema.format === "string" ? (FORMAT_VALUES[schema.format] ?? "string") : "string";
+
+  if (value.length < minimum) {
+    if (schema.format) {
+      throw new TypeError(
+        `OpenAPI schema for "${operation}" has string constraints that require an explicit example.`,
+      );
+    }
+
+    value = value.padEnd(minimum, "x");
+  }
+
+  if (value.length > maximum) {
+    if (schema.format) {
+      throw new TypeError(
+        `OpenAPI schema for "${operation}" has string constraints that require an explicit example.`,
+      );
+    }
+
+    value = value.slice(0, maximum);
+  }
+
+  return value;
+}
+
+function synthesizeNumber(schema: OpenApiSchema, operation: string, integer: boolean): number {
+  const lower = schema.minimum ?? schema.exclusiveMinimum;
+  const upper = schema.maximum ?? schema.exclusiveMaximum;
+  const lowerExclusive = schema.minimum === undefined && schema.exclusiveMinimum !== undefined;
+  const upperExclusive = schema.maximum === undefined && schema.exclusiveMaximum !== undefined;
+  const multiple = schema.multipleOf;
+
+  if (multiple !== undefined && (!Number.isFinite(multiple) || multiple <= 0)) {
+    throw new TypeError(`OpenAPI schema for "${operation}" has an invalid "multipleOf".`);
+  }
+
+  let value = lower !== undefined ? lower : upper !== undefined && upper < 0 ? upper : 0;
+
+  if (integer) {
+    value = lower !== undefined ? Math.ceil(value) : Math.floor(value);
+
+    if (lowerExclusive && value <= lower!) {
+      value = Math.floor(lower!) + 1;
+    }
+
+    if (upperExclusive && value >= upper!) {
+      value = Math.ceil(upper!) - 1;
+    }
+  } else {
+    if (lowerExclusive && value <= lower!) {
+      value =
+        upper !== undefined
+          ? lower! + (upper - lower!) / 2
+          : lower! + Math.max(1, numericStep(lower!));
+    }
+
+    if (upperExclusive && value >= upper!) {
+      value = upper! - Math.max(1, numericStep(upper!));
+    }
+  }
+
+  if (multiple !== undefined) {
+    value = alignMultiple(value, multiple, lower !== undefined);
+
+    if (integer) {
+      let attempts = 0;
+
+      while (!Number.isInteger(value) && attempts < 10_000) {
+        value += multiple;
+        attempts += 1;
+      }
+    }
+  }
+
+  if (
+    !Number.isFinite(value) ||
+    (integer && !Number.isInteger(value)) ||
+    (lower !== undefined && (lowerExclusive ? value <= lower : value < lower)) ||
+    (upper !== undefined && (upperExclusive ? value >= upper : value > upper)) ||
+    (multiple !== undefined && !isMultipleOf(value, multiple))
+  ) {
+    throw new TypeError(
+      `OpenAPI schema for "${operation}" has numeric constraints that require an explicit example.`,
+    );
+  }
+
+  return value;
+}
+
+function synthesizeArray(
+  schema: OpenApiSchema,
+  operation: string,
+  references: LocalReferenceResolver,
+  active: Set<object>,
+): unknown[] {
+  const minimum = schema.minItems ?? (schema.items === undefined || schema.maxItems === 0 ? 0 : 1);
+  const maximum = schema.maxItems ?? Number.POSITIVE_INFINITY;
+
+  if (
+    minimum > maximum ||
+    minimum < 0 ||
+    !Number.isInteger(minimum) ||
+    (Number.isFinite(maximum) && (maximum < 0 || !Number.isInteger(maximum)))
+  ) {
+    throw new TypeError(`OpenAPI schema for "${operation}" has incompatible array length limits.`);
+  }
+
+  if (schema.uniqueItems && minimum > 1) {
+    throw new TypeError(
+      `OpenAPI schema for "${operation}" uses "uniqueItems" and requires an explicit example.`,
+    );
+  }
+
+  const item =
+    schema.items === undefined
+      ? null
+      : generateSchemaValue(schema.items, operation, references, active);
+  return Array.from({ length: minimum }, () => item);
+}
+
+function numericStep(value: number): number {
+  return Math.max(Math.abs(value) * Number.EPSILON, Number.EPSILON);
+}
+
+function alignMultiple(value: number, multiple: number, roundUp: boolean): number {
+  const ratio = value / multiple;
+  return (roundUp ? Math.ceil(ratio) : Math.floor(ratio)) * multiple;
+}
+
+function isMultipleOf(value: number, multiple: number): boolean {
+  const ratio = value / multiple;
+  return Math.abs(ratio - Math.round(ratio)) < 1e-12;
 }
 
 function mergeAllOf(

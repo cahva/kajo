@@ -141,5 +141,8 @@ and this project adheres to
   deserialized supported OpenAPI object parameter styles.
 - Preserved root-relative references in embedded Standard JSON Schemas by
   assigning each converted schema its own deterministic resource ID.
+- Generated response examples that honor string lengths, numeric bounds and
+  multiples, integer types, and array lengths, while requiring explicit
+  examples for unsupported constraints.
 
 [Unreleased]: https://github.com/cahva/kajo/commits/HEAD

@@ -511,10 +511,14 @@ Operations without examples generate a deterministic body from the response
 JSON Schema. Each schema node uses `example`, `examples`, `const`, `default`,
 or `enum` when present, merges `allOf`, picks the first `oneOf` or `anyOf`
 branch, and otherwise synthesizes a placeholder from `type`: `"string"` or a
-fixed constant for known string formats, the `minimum` or `0` for numbers,
-`true` for booleans, one generated `items` element for arrays, and every
-declared property for objects. Unconstrained schemas produce `{}`, and
-recursive schemas require an explicit example.
+fixed constant for known string formats, a valid bounded/multiple value for
+numbers, `true` for booleans, the minimum number of generated `items` for
+arrays, and every declared property for objects. String lengths, numeric
+bounds, `multipleOf`, and array lengths are respected. Constraints that cannot
+be synthesized safely, such as `pattern` or multi-item `uniqueItems`, require
+an explicit example rather than producing a value that contradicts the schema.
+Unconstrained schemas produce `{}`, and recursive schemas require an explicit
+example.
 
 The OpenAPI integration supports inline examples, locally referenced examples,
 schema-generated values, operation handlers, route-contract export, and
