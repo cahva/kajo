@@ -10,27 +10,46 @@ type GetPetResponse = operations["getPetById"]["responses"][200]["content"]["app
 type GetOrderResponse = operations["getOrderById"]["responses"][200]["content"]["application/json"];
 type InventoryResponse =
   operations["getInventory"]["responses"][200]["content"]["application/json"];
+type Payload = Pet | Order | FindPetsResponse | InventoryResponse;
+
+interface ApiResult<Body = Payload> {
+  body: Body;
+  status: number;
+  statusText: string;
+}
 
 const result = requiredElement("result");
 const resultTitle = requiredElement("result-title");
 const mode = requiredElement("mode");
 const form = requiredElement<HTMLFormElement>("pet-form");
+const resultMethod = requiredElement("result-method");
+const resultPath = requiredElement("result-path");
+const resultStatus = requiredElement("result-status");
+const resultPreview = requiredElement("result-preview");
+const operationButtons = [...document.querySelectorAll<HTMLButtonElement>(".operation")];
 
-requiredElement("available").addEventListener("click", () => {
-  void show("Available pets", "Implemented operation", () =>
-    request<FindPetsResponse>("/v2/pet/findByStatus?status=available"),
+requiredElement("available").addEventListener("click", (event) => {
+  void show(
+    event,
+    "Available pets",
+    "Implemented",
+    "GET",
+    "/v2/pet/findByStatus?status=available",
+    () => request<FindPetsResponse>("/v2/pet/findByStatus?status=available"),
   );
 });
-requiredElement("pet").addEventListener("click", () => {
-  void show("Pet 1", "Implemented operation", () => request<GetPetResponse>("/v2/pet/1"));
+requiredElement("pet").addEventListener("click", (event) => {
+  void show(event, "Pet 1", "Implemented", "GET", "/v2/pet/1", () =>
+    request<GetPetResponse>("/v2/pet/1"),
+  );
 });
-requiredElement("order").addEventListener("click", () => {
-  void show("Order 1", "Implemented operation", () =>
+requiredElement("order").addEventListener("click", (event) => {
+  void show(event, "Order 1", "Implemented", "GET", "/v2/store/order/1", () =>
     request<GetOrderResponse>("/v2/store/order/1"),
   );
 });
-requiredElement("inventory").addEventListener("click", () => {
-  void show("Inventory", "Schema-generated fallback", () =>
+requiredElement("inventory").addEventListener("click", (event) => {
+  void show(event, "Inventory", "Generated", "GET", "/v2/store/inventory", () =>
     request<InventoryResponse>("/v2/store/inventory"),
   );
 });
@@ -43,7 +62,7 @@ form.addEventListener("submit", (event) => {
     photoUrls: [],
     status: "available",
   };
-  void show("Created pet", "Implemented operation", () =>
+  void show(event, "Created pet", "Implemented", "POST", "/v2/pet", () =>
     request<Pet>("/v2/pet", {
       body: JSON.stringify(pet),
       headers: { "content-type": "application/json" },
@@ -52,34 +71,160 @@ form.addEventListener("submit", (event) => {
   );
 });
 
-void show("Available pets", "Implemented operation", () =>
-  request<FindPetsResponse>("/v2/pet/findByStatus?status=available"),
+void show(
+  undefined,
+  "Available pets",
+  "Implemented",
+  "GET",
+  "/v2/pet/findByStatus?status=available",
+  () => request<FindPetsResponse>("/v2/pet/findByStatus?status=available"),
 );
 
 async function show(
+  event: Event | undefined,
   title: string,
   behavior: string,
-  load: () => Promise<Pet | Order | FindPetsResponse | InventoryResponse>,
+  method: "GET" | "POST",
+  path: string,
+  load: () => Promise<ApiResult>,
 ): Promise<void> {
+  const selected = event?.currentTarget;
+  const selectedButton =
+    selected instanceof HTMLButtonElement
+      ? selected
+      : event === undefined
+        ? requiredElement("available")
+        : undefined;
+  operationButtons.forEach((button) =>
+    button.classList.toggle("active", button === selectedButton),
+  );
   resultTitle.textContent = title;
   mode.textContent = behavior;
+  mode.classList.toggle("generated", behavior === "Generated");
+  resultMethod.textContent = method;
+  resultMethod.className = `method ${method.toLowerCase()}`;
+  resultPath.textContent = path;
+  resultStatus.textContent = "Waiting…";
+  resultPreview.replaceChildren(emptyState("Sending request to Kajo…"));
   result.textContent = "Loading…";
 
   try {
-    result.textContent = JSON.stringify(await load(), null, 2);
+    const response = await load();
+    resultStatus.textContent = `${response.status} ${response.statusText}`;
+    resultPreview.replaceChildren(...preview(response.body, behavior === "Generated"));
+    result.textContent = JSON.stringify(response.body, null, 2);
   } catch (error) {
-    result.textContent = error instanceof Error ? error.message : "Unknown error";
+    const message = error instanceof Error ? error.message : "Unknown error";
+    resultStatus.textContent = "Request failed";
+    resultPreview.replaceChildren(emptyState(message));
+    result.textContent = message;
   }
 }
 
-async function request<ResponseBody>(path: string, init?: RequestInit): Promise<ResponseBody> {
+async function request<ResponseBody>(
+  path: string,
+  init?: RequestInit,
+): Promise<ApiResult<ResponseBody>> {
   const response = await fetch(path, init);
 
   if (!response.ok) {
     throw new Error(`Request failed with ${response.status} ${response.statusText}`);
   }
 
-  return response.json() as Promise<ResponseBody>;
+  return {
+    body: (await response.json()) as ResponseBody,
+    status: response.status,
+    statusText: response.statusText || statusText(response.status),
+  };
+}
+
+function statusText(status: number): string {
+  return (
+    {
+      200: "OK",
+      201: "Created",
+      204: "No Content",
+    }[status] ?? ""
+  );
+}
+
+function preview(value: unknown, generated: boolean): HTMLElement[] {
+  if (Array.isArray(value)) {
+    return value.length > 0
+      ? value.map((entry) => entityCard(entry))
+      : [emptyState("The operation returned an empty collection.")];
+  }
+
+  if (typeof value === "object" && value !== null && Object.keys(value).length > 0) {
+    return [entityCard(value)];
+  }
+
+  return [
+    emptyState(
+      generated
+        ? "This operation has no handler. Kajo synthesized this empty object from Petstore's inventory schema."
+        : "The operation completed without response fields.",
+    ),
+  ];
+}
+
+function entityCard(value: unknown): HTMLElement {
+  const card = element("article", "entity-card");
+
+  if (typeof value !== "object" || value === null) {
+    card.append(elementWithText("strong", String(value)));
+    return card;
+  }
+
+  const name = Reflect.get(value, "name");
+  const id = Reflect.get(value, "id");
+  const status = Reflect.get(value, "status");
+  const petId = Reflect.get(value, "petId");
+  card.append(
+    elementWithText(
+      "strong",
+      typeof name === "string" ? name : petId !== undefined ? `Order #${String(id)}` : "Response",
+    ),
+  );
+
+  if (id !== undefined) {
+    card.append(elementWithText("span", `ID ${String(id)}`));
+  }
+
+  if (petId !== undefined) {
+    card.append(elementWithText("span", `Pet ${String(petId)}`));
+  }
+
+  if (typeof status === "string") {
+    card.append(elementWithText("span", status, "entity-status"));
+  }
+
+  return card;
+}
+
+function emptyState(message: string): HTMLElement {
+  return elementWithText("div", message, "empty-state");
+}
+
+function elementWithText<Tag extends keyof HTMLElementTagNameMap>(
+  tag: Tag,
+  text: string,
+  className?: string,
+): HTMLElementTagNameMap[Tag] {
+  const node = element(tag, className);
+  node.textContent = text;
+  return node;
+}
+
+function element<Tag extends keyof HTMLElementTagNameMap>(
+  tag: Tag,
+  className?: string,
+): HTMLElementTagNameMap[Tag] {
+  const node = document.createElement(tag);
+  if (className) {
+    node.className = className;
+  }
+  return node;
 }
 
 function requiredElement<ElementType extends HTMLElement = HTMLElement>(id: string): ElementType {
