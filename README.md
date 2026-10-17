@@ -1,8 +1,10 @@
-# Kajo
+<p align="center">
+  <img src="https://raw.githubusercontent.com/cahva/kajo/main/logos/kajo-banner.svg" alt="Kajo: your backend on the horizon." width="640">
+</p>
 
-[![JSR](https://jsr.io/badges/@cahva/kajo)](https://jsr.io/@cahva/kajo)
-
-> Your backend on the horizon.
+<p align="center">
+  <a href="https://jsr.io/@cahva/kajo"><img src="https://jsr.io/badges/@cahva/kajo" alt="JSR"></a>
+</p>
 
 Kajo is a fully typed, in-memory API simulator for building and testing
 applications without a backend. Define routes, models, factories, and
