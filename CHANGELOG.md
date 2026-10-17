@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- An overview with examples on the main entry point's JSR docs page.
+
 ## [0.1.3] - 2026-10-17
 
 ### Changed
