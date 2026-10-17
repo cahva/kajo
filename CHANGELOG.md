@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- The README's examples link, which pointed at a folder JSR does not
+  publish.
+
 ## [0.1.1] - 2026-10-17
 
 ### Added
