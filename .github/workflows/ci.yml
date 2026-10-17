@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+# Read-only by default. release.yml calls this workflow, so the repository's own
+# test code must never be able to inherit a write-capable token.
+permissions:
+  contents: read
+
+concurrency:
+  # Supersede a pull request's earlier runs, but never cancel a run a release
+  # is waiting on: release.yml calls this workflow and blocks on its result.
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      # Actions are pinned to full commit SHAs. A moving tag lets the action's
+      # code change under us, which matters most in a workflow that runs
+      # alongside a write-capable job.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
+        with:
+          cache: true
+
+      - run: vp install
+
+      - name: Format, lint, and type check
+        run: vp check
+
+      - name: Unit tests
+        run: vp test
+
+      - name: Install Chromium
+        run: vp exec playwright install --with-deps chromium
+
+      - name: Browser tests
+        run: vp run test:browser
+
+      - name: Build
+        run: vp run build
+
+      - name: JSR publish dry run
+        run: vp run publish:check
+
+  # Static analysis of these workflows themselves: permissions granted too
+  # widely, actions referenced by a moving tag, template injection, and
+  # commits pinned to a SHA that does not belong to the action's repository.
+  workflows:
+    name: Workflow security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Read-only on purpose. Annotations put findings inline on the pull
+      # request without needing security-events: write.
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        with:
+          inputs: .github/workflows/
+          advanced-security: false
+          annotations: true

@@ -1,6 +1,6 @@
 {
   "name": "@cahva/kajo",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Your backend on the horizon.",
   "homepage": "https://github.com/cahva/kajo#readme",
   "bugs": {
@@ -27,7 +27,6 @@
     "example:petstore": "cd examples/petstore && vp run dev",
     "example:task-board": "cd examples/task-board && vp dev",
     "publish:check": "vp exec jsr publish --dry-run --allow-dirty",
-    "release": "vp exec jsr publish",
     "test": "vp test",
     "test:browser": "vp test --config vite.browser.config.ts",
     "prepare": "vp config"

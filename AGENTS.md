@@ -25,3 +25,21 @@ release. Add a tool name to select part of the graph. For example, run
 - [ ] If setup, runtime, or package-manager behavior looks wrong, run `vp env doctor` and include its output when asking for help.
 
 <!--VITE PLUS END-->
+
+## Releasing
+
+Kajo publishes to JSR as `@cahva/kajo` from `.github/workflows/release.yml`.
+
+1. Open a release-prep PR: rename `## [Unreleased]` in `CHANGELOG.md` to
+   `## [X.Y.Z] - YYYY-MM-DD`, add a fresh empty `## [Unreleased]` above it,
+   update the link references at the bottom, and set `"version"` to `X.Y.Z` in
+   both `jsr.json` and `package.json`.
+2. Merge it to `main`.
+3. Tag the merge commit with a signed annotated tag and push it:
+   `git tag -s vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.
+4. The workflow refuses unsigned or lightweight tags, tags not contained in
+   `main`, and versions that do not match both manifests. It then runs CI,
+   publishes to JSR over OIDC, and creates the GitHub release with the
+   changelog section as notes.
+
+Never publish from a local machine; JSR versions cannot be replaced.
