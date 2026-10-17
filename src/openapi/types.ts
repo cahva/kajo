@@ -121,6 +121,7 @@ export interface OpenApiReference {
 }
 
 export interface OpenApiRoute {
+  readonly document: OpenApiDocument;
   readonly method: OpenApiMethod;
   readonly openApiPath: string;
   readonly operation: OpenApiOperation;
@@ -150,3 +151,27 @@ export interface OpenApiValidationIssue {
 export type OpenApiValidationResult =
   | { readonly issues: readonly OpenApiValidationIssue[] }
   | { readonly value: OpenApiValidatedRequest };
+
+export interface OpenApiSchemaValidatorIssue {
+  readonly message: string;
+  readonly path?: readonly (number | string)[];
+}
+
+export type OpenApiSchemaValidatorResult =
+  | { readonly issues: readonly OpenApiSchemaValidatorIssue[] }
+  | { readonly value: unknown };
+
+export interface OpenApiSchemaValidatorContext {
+  readonly document?: OpenApiDocument;
+  readonly location: OpenApiParameter["in"] | "body";
+  readonly name?: string;
+  readonly operationId: string;
+}
+
+export interface OpenApiSchemaValidator {
+  validate(
+    schema: OpenApiSchema | boolean,
+    value: unknown,
+    context: OpenApiSchemaValidatorContext,
+  ): OpenApiSchemaValidatorResult | Promise<OpenApiSchemaValidatorResult>;
+}

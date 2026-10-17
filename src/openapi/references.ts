@@ -1,7 +1,7 @@
 import type { OpenApiDocument, OpenApiReference } from "./types.ts";
 
 export class LocalReferenceResolver {
-  constructor(private readonly document: OpenApiDocument) {}
+  constructor(readonly document: OpenApiDocument) {}
 
   resolve(value: object, location: string, seen = new Set<string>()): object {
     if ("$ref" in value && typeof value.$ref !== "string") {

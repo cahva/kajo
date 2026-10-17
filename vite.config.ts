@@ -8,6 +8,7 @@ export default defineConfig({
     "*": "vp check --fix",
   },
   pack: {
+    entry: ["src/index.ts", "src/openapi/ajv.ts"],
     dts: {
       tsgo: true,
     },

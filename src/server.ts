@@ -49,6 +49,8 @@ import {
   type OpenApiInfo,
   OpenApiOperationRegistry,
   type OpenApiRoute,
+  type OpenApiRouteContract,
+  type OpenApiSchemaValidator,
   validateOpenApiRequest,
 } from "./openapi.ts";
 import { Router } from "./router.ts";
@@ -61,8 +63,15 @@ import {
 } from "./shorthand.ts";
 
 const HTTP_METHODS = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "TRACE"] as const;
+const OPENAPI_RUNTIME: unique symbol = Symbol("kajo.openapi.runtime");
 
 type HttpMethod = (typeof HTTP_METHODS)[number];
+type InternalRouteOptions = GetRouteOptions & {
+  readonly [OPENAPI_RUNTIME]?: {
+    readonly contract: OpenApiRouteContract;
+    readonly document: OpenApiDocument;
+  };
+};
 
 export type UnhandledRequestPolicy = "bypass" | "error";
 
@@ -135,6 +144,11 @@ export interface ServerOptions<
   readonly openapi?: OpenApiDocument;
   /** Override imported OpenAPI operations by their operationId. */
   readonly openapiHandlers?: OpenApiHandlerRegistry<Fixtures, Models>;
+  /**
+   * Validate plain JSON Schemas in OpenAPI operations. Imported operations are only
+   * validated when this is set; Standard Schema contracts always use their own library.
+   */
+  readonly openapiValidator?: OpenApiSchemaValidator;
   /** Initialize additional application data. */
   readonly seeds?: (server: Server<Fixtures, Models>) => void;
   /** Application and per-model response serializers. */
@@ -155,6 +169,7 @@ export class Server<
   readonly #fixtures: Fixtures;
   readonly #models: Models;
   readonly #openApiOperations = new OpenApiOperationRegistry();
+  readonly #openApiValidator: OpenApiSchemaValidator | undefined;
   readonly #factorySequences = new Map<string, number>();
   readonly #factoryStack: string[] = [];
   readonly #requestHistory: RequestLog[] = [];
@@ -219,6 +234,7 @@ export class Server<
     this.#factories = options.factories ?? {};
     this.#fixtures = (options.fixtures ?? {}) as Fixtures;
     this.#models = (options.models ?? {}) as Models;
+    this.#openApiValidator = options.openapiValidator;
     this.#trackRequests = options.trackRequests ?? false;
     const identityManagers = Object.fromEntries(
       Object.entries(options.identityManagers ?? {}).map(([name, Manager]) => [
@@ -527,9 +543,15 @@ export class Server<
 
     try {
       try {
-        const contract = match.route.options.openapi;
+        const runtime = (match.route.options as InternalRouteOptions)[OPENAPI_RUNTIME];
+        // Imported operations only validate when an adapter is configured.
+        const contract =
+          match.route.options.openapi ?? (this.#openApiValidator ? runtime?.contract : undefined);
         const validation = contract
-          ? await validateOpenApiRequest(contract, routeRequest)
+          ? await validateOpenApiRequest(contract, routeRequest, {
+              document: runtime?.document,
+              validator: this.#openApiValidator,
+            })
           : { value: routeRequest.validated };
 
         if ("issues" in validation) {
@@ -790,14 +812,19 @@ export class Server<
     route: OpenApiRoute,
     handler: RouteHandler<ServerTables<Fixtures, Models>, Models> | undefined,
   ): void {
-    this.#register(route.method, route.path, handler ?? route.response, {});
+    this.#register(route.method, route.path, handler ?? route.response, {
+      [OPENAPI_RUNTIME]: {
+        contract: route.operation as OpenApiRouteContract,
+        document: route.document,
+      },
+    });
   }
 
   #register(
     method: HttpMethod,
     path: string,
     responder: RouteResponder<ServerTables<Fixtures, Models>, Models> | undefined,
-    options: GetRouteOptions,
+    options: InternalRouteOptions,
   ): void {
     const address = this.#boundary.resolve(this.urlPrefix, this.namespace, path);
 
@@ -900,6 +927,7 @@ export function createServer<Fixtures extends DatabaseData = {}, Models extends 
     intercept: options.intercept,
     logging: options.logging,
     models: options.models,
+    openapiValidator: options.openapiValidator,
     serializers: options.serializers,
     timing: options.timing,
     trackRequests: options.trackRequests,

@@ -10,6 +10,7 @@ import {
   type OpenApiReference,
   type OpenApiRequestBody,
   type OpenApiSchema,
+  type OpenApiSchemaValidator,
 } from "../../src/index.ts";
 
 const document = {
@@ -866,6 +867,103 @@ describe("OpenAPI", () => {
     const response = await server.handle(new Request("https://example.test/tasks/1"));
 
     await expect(response?.json()).resolves.toEqual({ id: "1", title: "First" });
+  });
+
+  test("validates referenced schemas from imported operations with a configured validator", async () => {
+    const validator: OpenApiSchemaValidator = {
+      validate(schema, value, context) {
+        if (context.location === "path" && (schema as OpenApiSchema).type === "integer") {
+          return typeof value === "number" && Number.isInteger(value)
+            ? { value }
+            : { issues: [{ message: "Expected an integer." }] };
+        }
+
+        if (
+          context.location === "body" &&
+          (typeof value !== "object" || value === null || !("name" in value))
+        ) {
+          return { issues: [{ message: 'Required property "name" is missing.', path: ["name"] }] };
+        }
+
+        return { value };
+      },
+    };
+    const server = createServer({
+      intercept: false,
+      openapi: {
+        components: {
+          schemas: {
+            Pet: {
+              properties: { name: { type: "string" } },
+              required: ["name"],
+              type: "object",
+            },
+            PetId: { type: "integer" },
+          },
+        },
+        openapi: "3.1.0",
+        paths: {
+          "/pets/{petId}": {
+            post: {
+              operationId: "updatePet",
+              parameters: [
+                {
+                  in: "path",
+                  name: "petId",
+                  required: true,
+                  schema: { $ref: "#/components/schemas/PetId" },
+                },
+              ],
+              requestBody: {
+                content: {
+                  "application/json": {
+                    schema: { $ref: "#/components/schemas/Pet" },
+                  },
+                },
+                required: true,
+              },
+              responses: { "204": { description: "Updated" } },
+            },
+          },
+        },
+      },
+      openapiHandlers: {
+        updatePet: (_schema, request) => Response.json(request.validated),
+      },
+      openapiValidator: validator,
+    });
+
+    const valid = await server.handle(
+      new Request("https://example.test/pets/7", {
+        body: JSON.stringify({ name: "Kajo" }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    const invalid = await server.handle(
+      new Request("https://example.test/pets/nope", {
+        body: JSON.stringify({}),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+
+    await expect(valid?.json()).resolves.toMatchObject({
+      body: { name: "Kajo" },
+      parameters: { path: { petId: 7 } },
+    });
+    expect(invalid?.status).toBe(400);
+    await expect(invalid?.json()).resolves.toMatchObject({
+      issues: [
+        { location: "path", message: "Expected an integer.", name: "petId" },
+        {
+          location: "body",
+          message: 'Required property "name" is missing.',
+          path: ["name"],
+        },
+      ],
+      operationId: "updatePet",
+    });
   });
 
   test("resolves local path, response, example, and schema references", async () => {

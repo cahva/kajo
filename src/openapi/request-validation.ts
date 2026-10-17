@@ -7,15 +7,19 @@ import {
   mediaTypePriority,
   normalizeMediaType,
 } from "./media-types.ts";
-import { isReference } from "./references.ts";
+import { isReference, LocalReferenceResolver } from "./references.ts";
 import { isKajoSchema, standardJsonSchema } from "./standard-schema.ts";
 import type {
   OpenApiMediaType,
-  OpenApiOperation,
+  OpenApiDocument,
   OpenApiParameter,
+  OpenApiReference,
   OpenApiRequestBody,
   OpenApiRouteContract,
   OpenApiSchema,
+  OpenApiSchemaValidator,
+  OpenApiSchemaValidatorContext,
+  OpenApiSchemaValidatorResult,
   OpenApiValidationIssue,
   OpenApiValidationResult,
 } from "./types.ts";
@@ -23,6 +27,10 @@ import type {
 export async function validateOpenApiRequest(
   contract: OpenApiRouteContract,
   request: KajoRequest,
+  options: {
+    readonly document?: OpenApiDocument;
+    readonly validator?: OpenApiSchemaValidator;
+  } = {},
 ): Promise<OpenApiValidationResult> {
   const issues: OpenApiValidationIssue[] = [];
   const parameters: Record<OpenApiParameter["in"], Record<string, unknown>> = {
@@ -31,13 +39,21 @@ export async function validateOpenApiRequest(
     path: {},
     query: {},
   };
+  const references = options.document ? new LocalReferenceResolver(options.document) : undefined;
 
-  for (const parameter of contract.parameters ?? []) {
-    if (isReference(parameter)) {
-      continue;
-    }
+  for (const parameterOrReference of contract.parameters ?? []) {
+    const parameter = resolveObject<OpenApiParameter>(
+      parameterOrReference,
+      references,
+      `parameter for "${contract.operationId}"`,
+    );
 
-    const value = parameterValue(parameter, request);
+    const schema = resolveSchema(
+      parameter.schema,
+      references,
+      `parameter "${parameter.name}" for "${contract.operationId}"`,
+    );
+    const value = parameterValue(parameter, request, schema);
 
     if (value === undefined) {
       if (parameter.required) {
@@ -67,12 +83,33 @@ export async function validateOpenApiRequest(
       }
 
       parameters[parameter.in][parameter.name] = validation.value;
-    } else {
-      parameters[parameter.in][parameter.name] = value;
+      continue;
     }
+
+    const validation = await validatePlainSchema(schema, value, options.validator, {
+      document: options.document,
+      location: parameter.in,
+      name: parameter.name,
+      operationId: contract.operationId,
+    });
+
+    if (validation && "issues" in validation) {
+      issues.push(
+        ...validation.issues.map((issue) => ({
+          location: parameter.in,
+          message: issue.message,
+          name: parameter.name,
+          path: issue.path,
+        })),
+      );
+      continue;
+    }
+
+    parameters[parameter.in][parameter.name] =
+      validation && "value" in validation ? validation.value : value;
   }
 
-  const body = await validateRequestBody(contract.requestBody, request, issues);
+  const body = await validateRequestBody(contract, request, issues, references, options.validator);
 
   return issues.length > 0
     ? { issues }
@@ -85,13 +122,20 @@ export async function validateOpenApiRequest(
 }
 
 async function validateRequestBody(
-  requestBody: OpenApiOperation["requestBody"],
+  operation: OpenApiRouteContract,
   request: KajoRequest,
   issues: OpenApiValidationIssue[],
+  references: LocalReferenceResolver | undefined,
+  validator: OpenApiSchemaValidator | undefined,
 ): Promise<unknown> {
-  if (!requestBody || isReference(requestBody)) {
+  if (!operation.requestBody) {
     return undefined;
   }
+  const requestBody = resolveObject<OpenApiRequestBody | KajoSchema>(
+    operation.requestBody,
+    references,
+    `request body for "${operation.operationId}"`,
+  );
 
   let directSchema: KajoSchema | undefined;
   let definition: OpenApiRequestBody | undefined;
@@ -150,13 +194,20 @@ async function validateRequestBody(
     }
   }
 
-  if (!isKajoSchema(schema)) {
-    return value;
-  }
+  const validation = isKajoSchema(schema)
+    ? await validateStandardSchema(schema, value)
+    : await validatePlainSchema(
+        resolveSchema(schema, references, `request body for "${operation.operationId}"`),
+        value,
+        validator,
+        {
+          document: references?.document,
+          location: "body",
+          operationId: operation.operationId,
+        },
+      );
 
-  const validation = await validateStandardSchema(schema, value);
-
-  if (validation.issues) {
+  if (validation && "issues" in validation) {
     issues.push(
       ...validation.issues.map((issue) => ({
         location: "body" as const,
@@ -167,7 +218,7 @@ async function validateRequestBody(
     return undefined;
   }
 
-  return validation.value;
+  return validation && "value" in validation ? validation.value : value;
 }
 
 function selectRequestMediaType(
@@ -199,11 +250,15 @@ function selectMediaType(
   return selected ? { type: selected[0], value: selected[1] } : undefined;
 }
 
-function parameterValue(parameter: OpenApiParameter, request: KajoRequest): unknown {
+function parameterValue(
+  parameter: OpenApiParameter,
+  request: KajoRequest,
+  resolvedSchema?: OpenApiSchema | boolean,
+): unknown {
   const url = new URL(request.url);
-  const schema = parameterJsonSchema(parameter.schema);
+  const schema = parameterJsonSchema(parameter.schema, resolvedSchema);
 
-  if (schemaHasType(schema, "object")) {
+  if (schema && schemaHasType(schema, "object")) {
     return objectParameterValue(parameter, request, url, schema);
   }
 
@@ -235,12 +290,14 @@ function parameterValue(parameter: OpenApiParameter, request: KajoRequest): unkn
     return undefined;
   }
 
-  if (!schemaHasType(schema, "array")) {
-    return values.at(-1);
+  if (!schema || !schemaHasType(schema, "array")) {
+    return decodePrimitive(values.at(-1), schema);
   }
 
   const explode = parameter.explode ?? (parameter.in === "query" || parameter.in === "cookie");
-  return explode ? values : values.flatMap((value) => value.split(","));
+  const items = explode ? values : values.flatMap((value) => value.split(","));
+  const itemSchema = parameterJsonSchema(schema.items);
+  return items.map((value) => decodePrimitive(value, itemSchema));
 }
 
 function objectParameterValue(
@@ -263,9 +320,13 @@ function objectParameterValue(
             );
 
       if (values.length > 0) {
-        object[name] = schemaHasType(parameterJsonSchema(property), "array")
-          ? values
-          : values.at(-1);
+        const propertySchema = parameterJsonSchema(property);
+        object[name] =
+          propertySchema && schemaHasType(propertySchema, "array")
+            ? values.map((value) =>
+                decodePrimitive(value, parameterJsonSchema(propertySchema.items)),
+              )
+            : decodePrimitive(values.at(-1), propertySchema);
       }
     }
 
@@ -296,23 +357,51 @@ function objectParameterValue(
         parts[index * 2 + 1]!,
       ]);
 
-  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+  return entries.length > 0
+    ? Object.fromEntries(
+        entries.map(([name, value]) => [
+          name,
+          decodePrimitive(value, parameterJsonSchema(schema.properties?.[name])),
+        ]),
+      )
+    : undefined;
+}
+
+function decodePrimitive(value: string | undefined, schema: OpenApiSchema | undefined): unknown {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  // Only decimal literals decode; empty, hex, and padded values stay strings for the schema to reject.
+  if (
+    (schemaHasType(schema, "integer") || schemaHasType(schema, "number")) &&
+    /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(value)
+  ) {
+    return Number(value);
+  }
+
+  if (schemaHasType(schema, "boolean")) {
+    return value === "true" ? true : value === "false" ? false : value;
+  }
+
+  return value;
 }
 
 function parameterJsonSchema(
   schema: OpenApiParameter["schema"] | undefined,
+  resolved?: OpenApiSchema | boolean,
 ): OpenApiSchema | undefined {
   if (isKajoSchema(schema)) {
     return standardJsonSchema(schema, "input");
   }
 
-  return typeof schema === "object" && schema !== null && !isReference(schema) ? schema : undefined;
+  const candidate = resolved ?? schema;
+  return typeof candidate === "object" && candidate !== null && !isReference(candidate)
+    ? candidate
+    : undefined;
 }
 
-function schemaHasType(
-  schema: OpenApiSchema | undefined,
-  expected: string,
-): schema is OpenApiSchema {
+function schemaHasType(schema: OpenApiSchema | undefined, expected: string): boolean {
   return (
     schema?.type === expected || (Array.isArray(schema?.type) && schema.type.includes(expected))
   );
@@ -328,6 +417,42 @@ function requestCookie(header: string | null, name: string): string | undefined 
   }
 
   return undefined;
+}
+
+function resolveObject<Value extends object>(
+  value: Value | OpenApiReference,
+  references: LocalReferenceResolver | undefined,
+  location: string,
+): Value {
+  return isReference(value) && references
+    ? (references.resolve(value, location) as Value)
+    : (value as Value);
+}
+
+function resolveSchema(
+  schema: OpenApiParameter["schema"] | undefined,
+  references: LocalReferenceResolver | undefined,
+  location: string,
+): OpenApiSchema | boolean | undefined {
+  if (
+    schema === undefined ||
+    typeof schema === "boolean" ||
+    isKajoSchema(schema) ||
+    !isReference(schema)
+  ) {
+    return isKajoSchema(schema) ? standardJsonSchema(schema, "input") : schema;
+  }
+
+  return references ? (references.resolve(schema, location) as OpenApiSchema) : undefined;
+}
+
+async function validatePlainSchema(
+  schema: OpenApiSchema | boolean | undefined,
+  value: unknown,
+  validator: OpenApiSchemaValidator | undefined,
+  context: OpenApiSchemaValidatorContext,
+): Promise<OpenApiSchemaValidatorResult | undefined> {
+  return schema !== undefined && validator ? validator.validate(schema, value, context) : undefined;
 }
 
 async function validateStandardSchema(schema: KajoSchema, value: unknown) {

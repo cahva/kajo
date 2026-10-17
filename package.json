@@ -17,6 +17,7 @@
   "type": "module",
   "exports": {
     ".": "./dist/index.mjs",
+    "./openapi/ajv": "./dist/openapi/ajv.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -40,6 +41,8 @@
     "@types/node": "^26.1.1",
     "@valibot/to-json-schema": "^1.7.1",
     "@vitest/browser-playwright": "4.1.11",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "arktype": "^2.2.3",
     "jsr": "0.14.3",
     "playwright": "^1.62.1",
@@ -48,6 +51,18 @@
     "vite": "catalog:",
     "vite-plus": "catalog:",
     "zod": "^4.5.4"
+  },
+  "peerDependencies": {
+    "ajv": "^8.0.0",
+    "ajv-formats": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "ajv": {
+      "optional": true
+    },
+    "ajv-formats": {
+      "optional": true
+    }
   },
   "devEngines": {
     "packageManager": {
