@@ -1,5 +1,7 @@
+/** Initial records for a database, keyed by collection name. */
 export type DatabaseData = Record<string, readonly object[]>;
 
+/** Generates and tracks the IDs of one collection. */
 export interface IdentityManagerContract {
   /** Return and reserve an unused identifier. */
   fetch(): number | string;
@@ -9,8 +11,10 @@ export interface IdentityManagerContract {
   reset(): void;
 }
 
+/** A class that creates an identity manager for a collection. */
 export type IdentityManagerConstructor = new () => IdentityManagerContract;
 
+/** Options for {@linkcode createDatabase}. */
 export interface DatabaseOptions {
   /**
    * Identity manager constructors keyed by collection name.
@@ -24,69 +28,105 @@ export interface DatabaseOptions {
   >;
 }
 
+/** A record as stored in a collection, with its ID normalized to a string. */
 export type StoredRecord<RecordType extends object> = Omit<RecordType, "id"> & {
   id: string;
 };
 
+/** A record accepted by `insert`. The ID is optional and generated when omitted. */
 export type InsertableRecord<RecordType extends object> = Omit<RecordType, "id"> & {
   id?: number | string;
 };
 
+/** Attributes a record must equal to match a query. */
 export type RecordQuery<RecordType extends object> = Partial<StoredRecord<RecordType>>;
 
+/** Attributes to change in an update. The ID cannot be updated. */
 export type UpdateAttributes<RecordType extends object> = Partial<
   Omit<StoredRecord<RecordType>, "id">
 >;
 
+/** The record type stored in a table. */
 export type TableRecord<Table extends readonly object[]> = Table[number];
 
+/** The collections of a database, keyed by name. */
 export type DatabaseCollections<Tables extends DatabaseData> = {
   readonly [Name in keyof Tables]: DatabaseCollection<TableRecord<Tables[Name]>>;
 };
 
+/** An in-memory database with typed collections as properties. */
 export type Database<Tables extends DatabaseData = DatabaseData> = DatabaseApi<Tables> &
   DatabaseCollections<Tables>;
 
+/** A collection of records, iterable and indexable in insertion order. */
 export interface DatabaseCollection<RecordType extends object> extends Iterable<
   StoredRecord<RecordType>
 > {
+  /** The record at this position. */
   readonly [index: number]: StoredRecord<RecordType>;
+  /** The number of records. */
   readonly length: number;
 
+  /** Find a record by ID, or `null` when none matches. */
   find(id: number | string): StoredRecord<RecordType> | null;
+  /** Find the records with these IDs. */
   find(ids: readonly (number | string)[]): StoredRecord<RecordType>[];
+  /** Find the first record matching the query, or `null`. */
   findBy(query: RecordQuery<RecordType>): StoredRecord<RecordType> | null;
+  /**
+   * Find the first record matching the query, or insert one from the query and
+   * extra attributes.
+   */
   firstOrCreate(
     query: RecordQuery<RecordType>,
     attributesForCreate?: Partial<InsertableRecord<RecordType>>,
   ): StoredRecord<RecordType>;
+  /** Insert a record, generating an ID when it has none. */
   insert(record: InsertableRecord<RecordType>): StoredRecord<RecordType>;
+  /** Insert several records. */
   insert(records: readonly InsertableRecord<RecordType>[]): StoredRecord<RecordType>[];
+  /**
+   * Remove the record with this ID, the records matching a query, or every
+   * record when called without a target.
+   */
   remove(target?: number | string | RecordQuery<RecordType>): void;
+  /** Update every record. */
   update(attributes: UpdateAttributes<RecordType>): StoredRecord<RecordType>[];
+  /** Update the record with this ID, returning `null` when it does not exist. */
   update(
     id: number | string,
     attributes: UpdateAttributes<RecordType>,
   ): StoredRecord<RecordType> | null;
+  /** Update the records matching a query. */
   update(
     query: RecordQuery<RecordType>,
     attributes: UpdateAttributes<RecordType>,
   ): StoredRecord<RecordType>[];
+  /** Return every record matching the query. */
   where(query: RecordQuery<RecordType>): StoredRecord<RecordType>[];
 }
 
+/** Methods available on every database. */
 export interface DatabaseApi<Tables extends DatabaseData> {
+  /** Create a collection, or insert the records into it when it already exists. */
   createCollection<Name extends string, RecordType extends object>(
     name: Name,
     initialData?: readonly InsertableRecord<RecordType>[],
   ): DatabaseCollection<RecordType>;
+  /** Return a copy of every record, keyed by collection name. */
   dump(): {
     [Name in keyof Tables]: StoredRecord<TableRecord<Tables[Name]>>[];
   };
+  /** Remove every record and reset ID generation, keeping the collections. */
   emptyData(): void;
+  /** Insert records into collections, creating collections as needed. */
   loadData(data: Partial<Tables>): void;
 }
 
+/**
+ * The default identity manager. It generates sequential string IDs starting at
+ * `"1"` and skips IDs that were set explicitly.
+ */
 export class IdentityManager implements IdentityManagerContract {
   readonly #ids = new Set<string>();
   #nextId = 1;
@@ -340,6 +380,7 @@ class DatabaseImpl<Tables extends DatabaseData> implements DatabaseApi<Tables> {
   }
 }
 
+/** Create an in-memory database, optionally seeded with records. */
 export function createDatabase<Tables extends DatabaseData = DatabaseData>(
   initialData?: Tables,
   options: DatabaseOptions = {},

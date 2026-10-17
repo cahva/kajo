@@ -25,6 +25,7 @@ import type {
   OpenApiSchemaValidatorResult,
 } from "./types.ts";
 
+/** Options for {@link createAjvOpenApiValidator}. */
 export interface AjvOpenApiValidatorOptions {
   /**
    * Additional Ajv options. Kajo always disables value coercion, mutation, and strict
