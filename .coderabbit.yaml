@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+reviews:
+  # Keep the summary in CodeRabbit's walkthrough comment instead of the PR
+  # description.
+  high_level_summary_in_walkthrough: true
+  auto_review:
+    # Release PRs only move the changelog and bump versions; their content was
+    # reviewed in the PRs that introduced it.
+    ignore_title_keywords:
+      - "chore: release"
+  path_filters:
+    - "!pnpm-lock.yaml"
