@@ -76,6 +76,8 @@ interface Movie {
 }
 
 const server = createServer({
+  urlPrefix: "https://api.example.test",
+
   models: {
     movie: model<Movie>(),
   },
@@ -91,11 +93,15 @@ const server = createServer({
   },
 });
 
-const response = await fetch("/api/movies/1");
+const response = await fetch("https://api.example.test/api/movies/1");
 await response.json(); // { movie: { id: "1", title: "Arrival" } }
 
 server.shutdown();
 ```
+
+In browsers, routes default to the page's origin, so `urlPrefix` can be left
+out there and requests can use relative URLs. Node.js has no page origin, so it
+always needs a `urlPrefix`.
 
 Model and fixture types flow through `server.db` and the schema passed to route
 handlers. Schema collections return model instances, while low-level database
