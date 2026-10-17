@@ -19,7 +19,8 @@ something visible, but not quite tangible.
 
 Kajo is a development and testing tool; it is not meant to serve production
 traffic. It is in early development, so the API will keep evolving through 0.x
-releases, with changes documented in the [changelog](./CHANGELOG.md).
+releases, with changes documented in the [changelog](./CHANGELOG.md) and in
+each [GitHub release](https://github.com/cahva/kajo/releases).
 
 The core is implemented and tested: HTTP route handling with request
 interception, passthrough, and timing, an in-memory database with typed models
