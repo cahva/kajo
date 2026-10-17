@@ -1,28 +1,12 @@
 {
   "$schema": "https://jsr.io/schema/config-file.v1.json",
   "name": "@cahva/kajo",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "exports": {
     ".": "./src/index.ts",
     "./openapi/ajv": "./src/openapi/ajv.ts"
   },
-  "include": ["src", "README.md", "COMPATIBILITY.md", "CHANGELOG.md", "LICENSE"],
-  "exclude": [
-    ".git",
-    ".gitignore",
-    ".pnpm-lock.yaml.*.tmp",
-    ".vite-hooks",
-    ".zed",
-    "AGENTS.md",
-    "dist",
-    "examples",
-    "node_modules",
-    "package.json",
-    "pnpm-lock.yaml",
-    "pnpm-workspace.yaml",
-    "tests",
-    "tsconfig.json",
-    "vite.browser.config.ts",
-    "vite.config.ts"
-  ]
+  "publish": {
+    "include": ["src", "README.md", "COMPATIBILITY.md", "CHANGELOG.md", "LICENSE"]
+  }
 }

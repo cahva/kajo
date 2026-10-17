@@ -1,5 +1,7 @@
 # Kajo
 
+[![JSR](https://jsr.io/badges/@cahva/kajo)](https://jsr.io/@cahva/kajo)
+
 > Your backend on the horizon.
 
 Kajo is a fully typed, in-memory API simulator for building and testing
@@ -26,8 +28,27 @@ shorthand helpers. If you are coming from
 
 On top of that core, Kajo can register routes directly from an OpenAPI 3.1
 document, so a project with a spec does not have to define the same endpoints
-twice. Expanding that adapter with external `$ref` resolution and request
-validation, and publishing the first release, are the next steps.
+twice. Imported request schemas can be validated through an optional Ajv
+adapter; external `$ref` resolution is the next step.
+
+## Installation
+
+Kajo is published on [JSR](https://jsr.io/@cahva/kajo):
+
+```bash
+npx jsr add -D @cahva/kajo
+# or
+pnpm add -D jsr:@cahva/kajo
+# or
+deno add --dev jsr:@cahva/kajo
+```
+
+The optional [Ajv adapter](#openapi) for validating imported OpenAPI schemas
+needs `ajv` and `ajv-formats` as well:
+
+```bash
+npm install -D ajv ajv-formats
+```
 
 ## Current API
 
@@ -754,9 +775,13 @@ vp run publish:check
 
 ## Publishing
 
-Kajo will be published to JSR as [`@cahva/kajo`](https://jsr.io/@cahva/kajo).
+Kajo is published to JSR as [`@cahva/kajo`](https://jsr.io/@cahva/kajo).
 The registry receives the TypeScript source declared in `jsr.json`; the local
 library build remains available for development and verification.
+
+Releases are cut from signed tags. Pushing a `vX.Y.Z` tag runs the release
+workflow, which publishes to JSR and creates a GitHub release from the matching
+[changelog](./CHANGELOG.md) section.
 
 ## License
 

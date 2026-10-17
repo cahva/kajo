@@ -1,0 +1,156 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+# No workflow-level write. Each job takes only what it needs, so the repository's
+# own test suite can never inherit a token that could push or publish.
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Repository-controlled code runs here, read-only.
+  test:
+    name: Tests
+    uses: $/.github/workflows/ci.yml
+    permissions:
+      # Checkout only. This job runs the repository's own test code.
+      contents: read
+
+  # Deterministic checks on the ref itself. Nothing from the repository is
+  # executed in this job: jq only reads tracked files as data.
+  guard:
+    name: Release gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # Reads the tag, its signature and the compare status. Never writes.
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A release ref must be an annotated tag carrying a signature GitHub can
+      # verify against a key registered to the account. A lightweight tag, an
+      # unsigned tag, or a signature from an unknown key is refused.
+      - name: The tag must be signed and verified
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          object_type=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" --jq '.object.type')
+          object_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" --jq '.object.sha')
+          if [ "$object_type" != "tag" ]; then
+            echo "$GITHUB_REF_NAME is a lightweight tag; a release tag must be annotated and signed" >&2
+            exit 1
+          fi
+          verified=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$object_sha" --jq '.verification.verified')
+          reason=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$object_sha" --jq '.verification.reason')
+          if [ "$verified" != "true" ]; then
+            echo "tag $GITHUB_REF_NAME is not a verified signed tag (reason: $reason)" >&2
+            exit 1
+          fi
+          commit=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$object_sha" --jq '.object.sha')
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "$GITHUB_REF_NAME is a verified signed tag at $commit"
+
+      # Releases are cut from main only. Without this, a tag pushed at any
+      # unreviewed commit would publish as a release.
+      - name: The tagged commit must be contained in main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT: ${{ steps.tag.outputs.commit }}
+        run: |
+          set -euo pipefail
+          status=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$COMMIT" --jq '.status')
+          case "$status" in
+            identical|behind)
+              echo "$COMMIT is contained in main (compare status: $status)" ;;
+            *)
+              echo "$COMMIT is not contained in main (compare status: $status)" >&2
+              exit 1 ;;
+          esac
+
+      # JSR publishes the version in jsr.json. package.json is kept in step for
+      # a future npm release.
+      - name: The tag must match jsr.json and package.json
+        id: version
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          jsr=$(jq -r .version jsr.json)
+          npm=$(jq -r .version package.json)
+          if [ "$tag" != "$jsr" ] || [ "$tag" != "$npm" ]; then
+            echo "tag $GITHUB_REF_NAME says $tag, jsr.json says $jsr, package.json says $npm" >&2
+            exit 1
+          fi
+          echo "version=$tag" >> "$GITHUB_OUTPUT"
+
+  # Publishes to JSR with a short-lived OIDC token; no secret is stored. Runs
+  # before the GitHub release because a JSR version can never be replaced, while
+  # a failed GitHub release can simply be rerun.
+  publish:
+    name: Publish to JSR
+    needs: [test, guard]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # the OIDC token JSR authenticates the publish with
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
+        with:
+          cache: false
+
+      # --ignore-scripts keeps lifecycle scripts from running next to the
+      # OIDC token. The publish only needs the dependency graph.
+      - run: vp install --ignore-scripts
+
+      - run: vp exec jsr publish
+
+  # Runs no repository code: awk reads CHANGELOG.md as data, and gh publishes
+  # the notes.
+  release:
+    name: GitHub release
+    needs: [guard, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # creating a release is the one write this job needs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Pull the release notes out of CHANGELOG.md
+        env:
+          VERSION: ${{ needs.guard.outputs.version }}
+        run: |
+          set -euo pipefail
+          awk -v v="$VERSION" 'index($0, "## [" v "]") == 1 {f=1; next} f && (/^## / || /^\[[^]]+\]: /) {exit} f' \
+            CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md"; then
+            echo "CHANGELOG.md has no '## [$VERSION]' section" >&2
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/notes.md"
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag

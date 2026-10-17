@@ -8,150 +8,47 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-17
+
+First public release.
+
 ### Added
 
-- Initial Vite+ library, TypeScript, testing, and JSR publishing configuration.
-- Typed `createServer` API with HTTP route registration.
-- Static JSON, native `Response`, and asynchronous route handlers.
-- Dynamic route parameters, query parameters, request bodies, and namespaces.
-- Global and per-route response timing.
-- Runtime-independent request handling, passthrough, and server shutdown.
-- Automatic Fetch and XMLHttpRequest interception with network passthrough.
-- Typed in-memory collections with fixtures, seeds, generated IDs, queries,
-  mutations, and reset behavior.
-- Application-wide and per-model custom identity managers for backend-specific
-  IDs.
-- Typed model definitions, schema collections, persisted model instances, and
-  automatic model response serialization.
-- Unsaved model lifecycle with `new`, `save`, `update`, `isNew`, and `isSaved`,
-  plus schema collection `findOrCreateBy` and `none` helpers.
-- Typed collection membership, bulk lifecycle, filtering, sorting, slicing, and
-  string helpers, including persisted `hasMany` membership changes.
-- Typed `belongsTo` and `hasMany` relationships with inverse discovery,
-  explicit inverses, and foreign-key synchronization.
-- Typed relationship ID properties and `new<Name>`/`create<Name>` association
-  helpers.
-- Typed polymorphic belongs-to relationships with explicit target unions,
-  `{ type, id }` identifiers, inverse synchronization, and serializer support.
-- Typed polymorphic has-many relationships with heterogeneous collections,
-  convenience helpers, inverse synchronization, cleanup, and serializer support.
-- Automatic relationship cleanup when a model is destroyed.
+- A typed `createServer` API with dynamic, wildcard, and namespaced routes,
+  static JSON, native `Response`, and async handlers, plus global and per-route
+  response timing.
+- Automatic Fetch and XMLHttpRequest interception with origin-aware request
+  ownership, `urlPrefix` support, method-aware `passthrough()` rules, and
+  strict unhandled-request diagnostics.
+- Typed in-memory collections with fixtures, seeds, `loadFixtures()`, queries,
+  mutations, reset, and application-wide or per-model identity managers.
+- Typed models with an unsaved lifecycle (`new`, `save`, `update`), schema
+  collection helpers, and collection filtering, sorting, and bulk operations.
+- Schema-backed models through the Standard JSON Schema interface, working with
+  Zod, Valibot, and ArkType.
+- `belongsTo` and `hasMany` relationships, including polymorphic ones, with
+  inverse discovery, foreign-key synchronization, association helpers, and
+  cleanup when a model is destroyed.
 - Application and per-model serializers with roots, attribute filtering, key
-  transforms, relationship IDs, sideloading, and embedding.
-- A `RestSerializer` preset and class-based extension hooks for root,
-  attribute, and relationship ID serialization.
-- Conventional CRUD route shorthands with inferred or explicit schema
-  collections and normalized JSON request bodies.
-- Typed `normalizedRequestAttrs()` support for sharing rooted and unrooted JSON
-  normalization with custom route handlers.
-- Coalesced GET shorthands supporting comma-separated and repeated OpenAPI
-  `ids` array parameters.
-- Runnable vanilla TypeScript task-board example covering browser interception,
-  relationships, serializers, a CRUD resource, and custom handlers.
-- Typed factories with sequences, order-independent dependent attributes,
-  single evaluation, dependency-cycle diagnostics, traits, overrides, and list
-  creation.
-- Typed `build()` and `buildList()` server helpers for producing unpersisted
-  factory models that can be saved later.
-- Typed `loadFixtures()` support for restoring all configured fixtures or a
-  selected set of fixture collections.
-- Base and trait-specific factory `afterCreate` hooks.
-- Declarative belongs-to factory associations with associated traits, override
-  precedence, and cycle diagnostics.
-- `resource()` route helper with action filters and custom paths.
-- Structured JSON responses for expected `HttpError` failures, including
-  shorthand `400` and `404` responses.
-- Origin-aware request ownership with browser same-origin defaults, registration
-  time `urlPrefix` support, strict unhandled-request diagnostics, and explicit
-  method-aware `passthrough()` rules.
-- Typed request diagnostics for handled, passthrough, unhandled, and errored
-  requests, with parsed request bodies in an optional collapsed browser-console
-  view.
-- Opt-in typed request history for handled, passthrough, unhandled, and errored
-  traffic, with explicit history clearing.
-- A living Mirage JS compatibility matrix covering supported behavior,
-  intentional differences, issue-driven fixes, and the prioritized backlog.
-- Named wildcard routes, decoded static and parameter segments, consistent
-  trailing-slash handling, and deterministic route specificity.
-- A separate headless Chromium suite covering real Fetch and XMLHttpRequest
-  interception.
-- Initial OpenAPI 3.1 integration for example-backed operations, path-template
-  conversion, deterministic response selection, and explicit route overrides.
-- Local OpenAPI JSON Pointer resolution for path items, responses, examples,
-  and schemas, with diagnostics for missing and circular references.
-- Deterministic JSON Schema response generation for OpenAPI operations without
-  examples, covering `const`, `default`, `enum`, composition keywords, string
-  formats, and typed placeholder synthesis.
-- Schema-backed model definitions using the Standard JSON Schema interface,
-  including inferred persisted attributes and retained runtime metadata.
-- Interchangeable Zod, Valibot, and ArkType implementations in the task-board
-  example using one frontend and Kajo server configuration.
-- OpenAPI operation registries and `operationId` handlers that connect imported
-  contracts to seeded Kajo data while retaining generated fallbacks.
-- OpenAPI contracts on Kajo-defined routes and combined document export, with
-  Standard Schema responses converted to JSON Schema.
-- Standard Schema request-body and parameter contracts with transformed handler
-  values and structured `400` validation responses.
-- Request validation and generated OpenAPI document inspection in every
-  task-board schema implementation.
-- Complete OpenAPI coverage for every application endpoint used by the
-  task-board frontend.
-- Compatibility coverage for all 20 operations in ReadMe's OpenAPI 3.1
-  Petstore document.
-- An OpenAPI-first Petstore browser example with generated TypeScript types,
-  seeded operation handlers, and schema-generated fallback behavior.
-- A pluggable JSON Schema validator boundary for imported OpenAPI parameters
-  and request bodies, including local reference resolution and primitive
-  parameter decoding.
-- An optional `@cahva/kajo/openapi/ajv` adapter with JSON Schema 2020-12,
-  nested local reference, and common format validation.
+  transforms, relationship IDs, sideloading, embedding, and a `RestSerializer`
+  preset.
+- CRUD route shorthands, coalesced GET shorthands, the `resource()` helper, and
+  `normalizedRequestAttrs()` for custom handlers.
+- Typed factories with sequences, dependent attributes, traits, `afterCreate`
+  hooks, belongs-to associations, and `build()`/`buildList()` helpers.
+- Structured JSON responses for `HttpError` failures.
+- Typed request diagnostics with an optional collapsed browser-console view,
+  and opt-in request history.
+- OpenAPI 3.1 import: example-backed operations, local `$ref` resolution,
+  deterministic schema-generated responses, and `operationId` handlers backed
+  by seeded data.
+- OpenAPI contracts on Kajo-defined routes with Standard Schema request
+  validation, structured `400` responses, and combined document export.
+- A pluggable JSON Schema validator for imported OpenAPI parameters and request
+  bodies, and an optional `@cahva/kajo/openapi/ajv` adapter using Ajv with JSON
+  Schema 2020-12 and common formats.
+- Task-board and OpenAPI-first Petstore browser examples, and a Mirage JS
+  compatibility matrix.
 
-### Changed
-
-- Unified homogeneous and polymorphic collection behavior behind one internal
-  implementation while retaining target-specific compatibility checks.
-- Embedded polymorphic relationships use a collision-checked, transform-aware
-  `__type` discriminator, and mixed rooted/rootless polymorphic serializers are
-  rejected explicitly.
-
-### Fixed
-
-- Added an unambiguous root command for launching the task-board example.
-- Normalized polymorphic relationship identifiers across fixture reads,
-  destruction cleanup, inverse synchronization, and diagnostics.
-- Preserved serializer roots, transforms, filtering, and type discriminators
-  for polymorphic collections and embedded relationships.
-- Validated unsaved polymorphic relationships immediately and restricted bulk
-  updates to attributes shared by every target model.
-- Unified primary-resource serialization and iterative sideload draining so
-  polymorphic roots stay stable, primary records are not duplicated, and
-  transitive includes are emitted.
-- Normalized the remaining inverse relationship comparisons and allowed
-  explicit `undefined` relationship placeholders to be assigned before save.
-- Excluded model IDs and conflicting target attribute types from polymorphic
-  bulk updates.
-- Added regression coverage ensuring passthrough leaves request metadata and
-  binary request and response bodies unchanged.
-- Added regression coverage ensuring query strings neither bypass registered
-  routes nor disappear from handler request parameters.
-- Recognized callable Standard Schema implementations such as ArkType in
-  OpenAPI request and response contracts.
-- Downloaded the task-board OpenAPI export through Fetch instead of navigating
-  to a client-intercepted endpoint.
-- Allowed imported operations without a `2xx` response to use their lowest
-  documented concrete response as a generated fallback.
-- Surfaced matched path and parsed query parameters in request diagnostics and
-  omitted empty request-body rows.
-- Preserved OpenAPI validation options on shorthand routes and recognized
-  responder-less GET contracts without requiring `coalesce`.
-- Completed required OpenAPI path parameters automatically, supported `TRACE`,
-  and kept generated `HEAD` responses bodyless.
-- Matched request media types case-insensitively with wildcard precedence and
-  deserialized supported OpenAPI object parameter styles.
-- Preserved root-relative references in embedded Standard JSON Schemas by
-  assigning each converted schema its own deterministic resource ID.
-- Generated response examples that honor string lengths, numeric bounds and
-  multiples, integer types, and array lengths, while requiring explicit
-  examples for unsupported constraints.
-
-[Unreleased]: https://github.com/cahva/kajo/commits/HEAD
+[Unreleased]: https://github.com/cahva/kajo/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/cahva/kajo/releases/tag/v0.1.0
