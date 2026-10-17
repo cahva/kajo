@@ -44,11 +44,12 @@ jobs:
       - name: Unit tests
         run: vp test
 
-      - name: Install Chromium
-        run: vp exec playwright install --with-deps chromium
-
+      # GitHub's Ubuntu runners ship Google Chrome, so the browser suite uses it
+      # instead of downloading Playwright's Chromium on every run.
       - name: Browser tests
         run: vp run test:browser
+        env:
+          KAJO_CHROMIUM_PATH: /usr/bin/google-chrome
 
       - name: Build
         run: vp run build
