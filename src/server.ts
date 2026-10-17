@@ -73,15 +73,22 @@ type InternalRouteOptions = GetRouteOptions & {
   };
 };
 
+/**
+ * What happens to a request Kajo owns when no route matches: `"bypass"` lets it
+ * reach the network and `"error"` rejects it.
+ */
 export type UnhandledRequestPolicy = "bypass" | "error";
 
+/** Options for {@linkcode Server.passthrough}. */
 export interface PassthroughOptions {
   /** Restrict this rule to these HTTP methods. */
   readonly methods?: readonly string[];
 }
 
+/** A conventional CRUD action registered by {@linkcode Server.resource}. */
 export type ResourceAction = "create" | "delete" | "index" | "show" | "update";
 
+/** Options for {@linkcode Server.resource}. */
 export interface ResourceOptions {
   /** Register only these actions. */
   readonly only?: readonly ResourceAction[];
@@ -91,29 +98,33 @@ export interface ResourceOptions {
   readonly path?: string;
 }
 
+/** Options for GET routes, including shorthand options. */
 export interface GetRouteOptions extends RouteOptions, ShorthandOptions {}
 
-/**
- * Configuration used to create a Kajo server.
- */
 type ServerTables<Fixtures extends DatabaseData, Models extends ModelRegistry> = Fixtures &
   ModelTables<Models>;
 
+/** Factories keyed by model name. */
 export type FactoryRegistry<Models extends ModelRegistry> = {
   readonly [Name in keyof Models]?: Factory<ModelAttributes<Models[Name]>, never, never>;
 };
 
+/** Identity managers keyed by collection name, with `application` as the fallback. */
 export type IdentityManagerRegistry<Fixtures extends DatabaseData, Models extends ModelRegistry> = {
   readonly application?: IdentityManagerConstructor;
 } & {
   readonly [Name in (keyof Fixtures | keyof Models) & string]?: IdentityManagerConstructor;
 };
 
+/** Route handlers for imported OpenAPI operations, keyed by `operationId`. */
 export type OpenApiHandlerRegistry<
   Fixtures extends DatabaseData,
   Models extends ModelRegistry,
 > = Readonly<Record<string, RouteHandler<ServerTables<Fixtures, Models>, Models> | undefined>>;
 
+/**
+ * Configuration used to create a Kajo server.
+ */
 export interface ServerOptions<
   Fixtures extends DatabaseData = DatabaseData,
   Models extends ModelRegistry = {},
@@ -225,6 +236,10 @@ export class Server<
     return this.#erroredRequests;
   }
 
+  /**
+   * Create a server without routes or seeds. {@linkcode createServer} also
+   * runs the `routes` and `seeds` options.
+   */
   constructor(options: Omit<ServerOptions<Fixtures, Models>, "routes" | "seeds"> = {}) {
     this.timing = options.timing ?? 0;
     this.logging = options.logging ?? false;
@@ -655,6 +670,10 @@ export class Server<
     this.#erroredRequests.length = 0;
   }
 
+  /**
+   * Register a DELETE route. Omit the responder to use the shorthand handler for
+   * the collection named by the path.
+   */
   delete(
     path: string,
     responder?: RouteResponder<ServerTables<Fixtures, Models>, Models>,
@@ -663,6 +682,7 @@ export class Server<
     this.#register("DELETE", path, responder, options);
   }
 
+  /** Alias for {@linkcode Server.delete}. */
   del(
     path: string,
     responder?: RouteResponder<ServerTables<Fixtures, Models>, Models>,
@@ -671,6 +691,10 @@ export class Server<
     this.delete(path, responder, options);
   }
 
+  /**
+   * Register a GET route. Pass options in place of the responder to configure
+   * the shorthand handler for the collection named by the path.
+   */
   get(
     path: string,
     responder?: GetRouteOptions | RouteResponder<ServerTables<Fixtures, Models>, Models>,
@@ -684,6 +708,7 @@ export class Server<
     this.#register("GET", path, responder, options);
   }
 
+  /** Register a HEAD route. */
   head(
     path: string,
     responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
@@ -692,6 +717,7 @@ export class Server<
     this.#register("HEAD", path, responder, options);
   }
 
+  /** Register an OPTIONS route. */
   options(
     path: string,
     responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,
@@ -700,6 +726,10 @@ export class Server<
     this.#register("OPTIONS", path, responder, options);
   }
 
+  /**
+   * Register a PATCH route. Omit the responder to use the shorthand handler for
+   * the collection named by the path.
+   */
   patch(
     path: string,
     responder?: RouteResponder<ServerTables<Fixtures, Models>, Models>,
@@ -708,6 +738,10 @@ export class Server<
     this.#register("PATCH", path, responder, options);
   }
 
+  /**
+   * Register a POST route. Omit the responder to use the shorthand handler for
+   * the collection named by the path.
+   */
   post(
     path: string,
     responder?: RouteResponder<ServerTables<Fixtures, Models>, Models>,
@@ -716,6 +750,10 @@ export class Server<
     this.#register("POST", path, responder, options);
   }
 
+  /**
+   * Register a PUT route. Omit the responder to use the shorthand handler for
+   * the collection named by the path.
+   */
   put(
     path: string,
     responder?: RouteResponder<ServerTables<Fixtures, Models>, Models>,
@@ -724,6 +762,7 @@ export class Server<
     this.#register("PUT", path, responder, options);
   }
 
+  /** Register a TRACE route. */
   trace(
     path: string,
     responder: RouteResponder<ServerTables<Fixtures, Models>, Models>,

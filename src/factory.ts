@@ -5,19 +5,26 @@ import type { Server } from "./server.ts";
 const TRAIT = Symbol("kajo.factory-trait");
 const ASSOCIATION = Symbol("kajo.factory-association");
 
+/** The model type a factory creates by default. */
 export type FactoryModel<Attributes extends object> = Model<
   Attributes,
   ModelRegistry,
   RelationshipRegistry
 >;
 
+/** The server passed to factory `afterCreate` hooks by default. */
 export type FactoryServer = Server<DatabaseData, ModelRegistry>;
 
+/** A hook that runs after a factory model is created and saved. */
 export type FactoryAfterCreate<Created = FactoryModel<object>, Context = FactoryServer> = (
   model: Created,
   server: Context,
 ) => void;
 
+/**
+ * A factory attribute: a fixed value, or a function that receives a zero-based
+ * sequence and can read other attributes through `this`.
+ */
 export type FactoryAttribute<Attributes extends object, Name extends keyof Attributes> =
   | Attributes[Name]
   | ((this: Readonly<Attributes>, sequence: number) => Attributes[Name]);
@@ -38,25 +45,33 @@ export type FactoryDefinition<
   readonly afterCreate?: FactoryAfterCreate<Created, Context>;
 } & Readonly<Record<string, unknown>>;
 
+/** A named group of attributes created with {@linkcode trait}. */
 export interface FactoryTrait<
   Attributes extends object = object,
   Created = FactoryModel<Attributes>,
   Context = FactoryServer,
 > {
+  /** The attributes this trait applies. */
   readonly [TRAIT]: FactoryDefinition<Attributes, Created, Context>;
 }
 
+/** A belongs-to association created with {@linkcode association}. */
 export interface FactoryAssociation {
+  /** Marks this value as a factory association. */
   readonly [ASSOCIATION]: true;
+  /** Traits applied to the associated model's factory. */
   readonly traits: readonly string[];
 }
 
+/** The result of evaluating a factory for one model. */
 export interface FactoryBuild<
   Attributes extends object,
   Created = FactoryModel<Attributes>,
   Context = FactoryServer,
 > {
+  /** The base and trait `afterCreate` hooks, in the order they run. */
   readonly afterCreate: readonly FactoryAfterCreate<Created, Context>[];
+  /** The resolved attributes, including overrides. */
   readonly attributes: Partial<Attributes> & Record<string, unknown>;
 }
 
@@ -68,6 +83,7 @@ export class Factory<
   Created = FactoryModel<Attributes>,
   Context = FactoryServer,
 > {
+  /** Create a factory from a definition. */
   static extend<
     Attributes extends object,
     Created = FactoryModel<Attributes>,
@@ -80,6 +96,7 @@ export class Factory<
 
   readonly #definition: FactoryDefinition<Attributes, Created, Context>;
 
+  /** Create a factory from a definition. */
   constructor(definition: FactoryDefinition<Attributes, Created, Context> = {}) {
     this.#definition = definition;
   }

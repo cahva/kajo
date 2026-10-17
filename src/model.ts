@@ -15,6 +15,7 @@ declare const modelRelationships: unique symbol;
 export const MODEL_METADATA: unique symbol = Symbol("kajo.model");
 const MODEL_AFTER_SAVE: unique symbol = Symbol("kajo.model.afterSave");
 
+/** Options shared by every relationship declaration. */
 export interface RelationshipOptions {
   /**
    * The relationship key on the associated model.
@@ -24,40 +25,58 @@ export interface RelationshipOptions {
   readonly inverse?: string | null;
 }
 
+/** A to-one relationship to a single model, declared with `belongsTo("name")`. */
 export interface BelongsToDefinition<Target extends string = string> extends RelationshipOptions {
+  /** Identifies this as a to-one relationship. */
   readonly kind: "belongsTo";
+  /** The name of the related model. */
   readonly modelName: Target;
+  /** Always `false` or absent for a single-target relationship. */
   readonly polymorphic?: false;
 }
 
+/** A to-one relationship whose target can be any of several models, declared with `belongsTo(["a", "b"])`. */
 export interface PolymorphicBelongsToDefinition<
   Targets extends readonly string[] = readonly string[],
 > extends RelationshipOptions {
+  /** Identifies this as a to-one relationship. */
   readonly kind: "belongsTo";
+  /** The models the relationship can point to. */
   readonly modelNames: Targets;
+  /** Marks the relationship as polymorphic. */
   readonly polymorphic: true;
 }
 
+/** A to-many relationship to a single model, declared with `hasMany("name")`. */
 export interface HasManyDefinition<Target extends string = string> extends RelationshipOptions {
+  /** Identifies this as a to-many relationship. */
   readonly kind: "hasMany";
+  /** The name of the related model. */
   readonly modelName: Target;
+  /** Always `false` or absent for a single-target relationship. */
   readonly polymorphic?: false;
 }
 
+/** A to-many relationship whose members can be any of several models, declared with `hasMany(["a", "b"])`. */
 export interface PolymorphicHasManyDefinition<
   Targets extends readonly string[] = readonly string[],
 > extends RelationshipOptions {
+  /** Identifies this as a to-many relationship. */
   readonly kind: "hasMany";
+  /** The models the relationship can contain. */
   readonly modelNames: Targets;
+  /** Marks the relationship as polymorphic. */
   readonly polymorphic: true;
 }
 
+/** Any relationship declaration accepted by a model definition. */
 export type RelationshipDefinition =
   | BelongsToDefinition
   | HasManyDefinition
   | PolymorphicBelongsToDefinition
   | PolymorphicHasManyDefinition;
 
+/** Relationship declarations keyed by relationship name. */
 export type RelationshipRegistry = Record<string, RelationshipDefinition>;
 
 /**
@@ -67,6 +86,7 @@ export function belongsTo<Target extends string>(
   modelName: Target,
   options?: RelationshipOptions,
 ): BelongsToDefinition<Target>;
+/** Declare a polymorphic to-one relationship that can point to any of the listed models. */
 export function belongsTo<const Targets extends readonly [string, ...string[]]>(
   modelNames: Targets,
   options?: RelationshipOptions,
@@ -89,6 +109,7 @@ export function hasMany<Target extends string>(
   modelName: Target,
   options?: RelationshipOptions,
 ): HasManyDefinition<Target>;
+/** Declare a polymorphic to-many relationship that can contain any of the listed models. */
 export function hasMany<const Targets extends readonly [string, ...string[]]>(
   modelNames: Targets,
   options?: RelationshipOptions,
@@ -114,24 +135,32 @@ export interface ModelDefinition<
     | KajoSchema<unknown, Attributes>
     | undefined,
 > {
+  /** Relationship declarations added with `extend()`. */
   readonly relationships: Relationships;
+  /** The Standard Schema that validates attributes, or `undefined` for a type-only model. */
   readonly schema: AttributeSchema;
+  /** Type-only marker carrying the attribute type. Never set at runtime. */
   readonly [modelAttributes]?: Attributes;
+  /** Type-only marker carrying the relationship types. Never set at runtime. */
   readonly [modelRelationships]?: Relationships;
 
+  /** Return a new definition with additional relationships. The original definition is unchanged. */
   extend<Additional extends RelationshipRegistry>(
     relationships: Additional,
   ): ModelDefinition<Attributes, Relationships & Additional, AttributeSchema>;
 }
 
+/** Model definitions keyed by singular model name. */
 export type ModelRegistry = Record<string, ModelDefinition>;
 
+/** The attribute type declared by a model definition. */
 export type ModelAttributes<Definition extends ModelDefinition> =
   Definition extends ModelDefinition<infer Attributes, RelationshipRegistry> ? Attributes : never;
 
 export type ModelRelationships<Definition extends ModelDefinition> =
   Definition extends ModelDefinition<object, infer Relationships> ? Relationships : never;
 
+/** The collection name Kajo derives from a singular model name, such as `post` to `posts` or `category` to `categories`. */
 export type Pluralize<Name extends string> = Name extends `${string}${"a" | "e" | "i" | "o" | "u"}y`
   ? `${Name}s`
   : Name extends `${infer Stem}y`
@@ -140,6 +169,7 @@ export type Pluralize<Name extends string> = Name extends `${string}${"a" | "e" 
       ? `${Name}es`
       : `${Name}s`;
 
+/** The model name Kajo derives from a plural collection name, the inverse of `Pluralize`. */
 export type Singularize<Name extends string> = Name extends `${infer Stem}ies`
   ? `${Stem}y`
   : Name extends `${infer Stem}ches`
@@ -156,6 +186,7 @@ export type Singularize<Name extends string> = Name extends `${infer Stem}ies`
               ? Stem
               : Name;
 
+/** Database table types derived from a model registry, keyed by pluralized model name. */
 export type ModelTables<Models extends ModelRegistry> = {
   [Name in keyof Models as Pluralize<Name & string>]: readonly ModelAttributes<Models[Name]>[];
 };
@@ -168,6 +199,7 @@ export function model<Attributes extends object = object>(): ModelDefinition<
   {},
   undefined
 >;
+/** Define a model whose attribute type is inferred from a Standard Schema, which also validates attributes at runtime. */
 export function model<AttributeSchema extends KajoSchema<unknown, object>>(
   schema: AttributeSchema,
 ): ModelDefinition<InferSchemaOutput<AttributeSchema>, {}, AttributeSchema>;
@@ -200,12 +232,16 @@ function createModelDefinition<
   });
 }
 
+/** The persisted model type for a model name in a registry. */
 export type ModelFor<Models extends ModelRegistry, Name extends string> = Name extends keyof Models
   ? Model<ModelAttributes<Models[Name]>, Models, ModelRelationships<Models[Name]>>
   : Model<object, Models>;
 
+/** Identifies the target of a polymorphic relationship by model type and ID. */
 export interface PolymorphicIdentifier<Type extends string = string> {
+  /** The related record's ID. */
   readonly id: string;
+  /** The related model's name. */
   readonly type: Type;
 }
 
@@ -219,6 +255,7 @@ type RelationshipModelName<Relationship extends RelationshipDefinition> = Relati
       ? Target
       : never;
 
+/** The unsaved model type for a model name in a registry. */
 export type NewModelFor<
   Models extends ModelRegistry,
   Name extends string,
@@ -356,6 +393,7 @@ export type Model<
   RelationshipValues<Models, Relationships> &
   RelationshipConveniences<Models, Relationships>;
 
+/** The attributes of an unsaved model, whose `id` is `null` until it is saved. */
 export type NewModelRecord<Attributes extends object> = Omit<Attributes, "id"> & {
   readonly id: null;
 };
@@ -380,19 +418,30 @@ export interface ModelInstance<
   Models extends ModelRegistry = {},
   Relationships extends RelationshipRegistry = {},
 > {
+  /** A snapshot of the stored attributes. */
   readonly attrs: StoredRecord<Attributes>;
+  /** Whether `destroy()` has removed this model from the database. */
   readonly isDestroyed: boolean;
+  /** The singular name of this model. */
   readonly modelName: string;
+  /** Internal relationship metadata used by serializers and collections. */
   readonly [MODEL_METADATA]: {
     readonly relationships: Relationships;
   };
 
+  /** Remove the model from the database and clean up its relationships. */
   destroy(): void;
+  /** Whether the record is missing from the database, such as after `destroy()`. */
   isNew(): boolean;
+  /** Whether the record is currently stored in the database. */
   isSaved(): boolean;
+  /** Refresh the attributes from the database. Throws if the model was destroyed. */
   reload(): Model<Attributes, Models, Relationships>;
+  /** Return this model. Persisted models are saved on every change. Throws if the model was destroyed. */
   save(): Model<Attributes, Models, Relationships>;
+  /** A plain copy of the stored attributes. */
   toJSON(): StoredRecord<Attributes>;
+  /** Update attributes in the database and return this model. Throws if the model was destroyed. */
   update(attributes: UpdateAttributes<Attributes>): Model<Attributes, Models, Relationships>;
 }
 
@@ -404,19 +453,30 @@ export interface NewModelInstance<
   Models extends ModelRegistry = {},
   Relationships extends RelationshipRegistry = {},
 > {
+  /** The unsaved attributes, with `id` set to `null`. */
   readonly attrs: NewModelRecord<Attributes>;
+  /** Whether the model was saved and then destroyed. */
   readonly isDestroyed: boolean;
+  /** The singular name of this model. */
   readonly modelName: string;
+  /** Internal relationship metadata used by serializers and collections. */
   readonly [MODEL_METADATA]: {
     readonly relationships: Relationships;
   };
 
+  /** Remove the model from the database if it was saved. Does nothing before the first save. */
   destroy(): void;
+  /** Whether the model has not been saved yet, or was destroyed. */
   isNew(): boolean;
+  /** Whether the model has been saved and not destroyed. */
   isSaved(): boolean;
+  /** Refresh the attributes from the database after a save. Before the first save, returns the model unchanged. */
   reload(): NewModel<Attributes, Models, Relationships>;
+  /** Insert the model and apply its pending relationships, then return the persisted model. */
   save(): Model<Attributes, Models, Relationships>;
+  /** A plain copy of the attributes. */
   toJSON(): NewModelRecord<Attributes>;
+  /** Assign attributes and save the model. */
   update(attributes: UpdateAttributes<Attributes>): Model<Attributes, Models, Relationships>;
 }
 
@@ -604,8 +664,10 @@ export class Collection<
   Collection<Attributes, Models, Relationships>,
   StoredRecord<Attributes>
 > {
+  /** Label used in error messages. */
   protected readonly description: string;
 
+  /** Wrap models of one type in a collection. */
   constructor(
     readonly modelName: string,
     models: Model<Attributes, Models, Relationships>[],
@@ -615,7 +677,9 @@ export class Collection<
     this.description = `collection:${modelName}`;
   }
 
+  /** Update the same attributes on every model in the collection. */
   update(attributes: UpdateAttributes<Attributes>): this;
+  /** Update one attribute on every model in the collection. */
   update<Name extends keyof UpdateAttributes<Attributes>>(
     key: Name,
     value: UpdateAttributes<Attributes>[Name],
@@ -631,6 +695,7 @@ export class Collection<
     return this.updateAll(attributes);
   }
 
+  /** Throws if the collection holds a different model type. */
   protected assertCollectionCompatible(
     collection: Collection<Attributes, Models, Relationships>,
   ): void {
@@ -641,6 +706,7 @@ export class Collection<
     }
   }
 
+  /** Throws if the model is a different model type. */
   protected assertCompatible(model: Model<Attributes, Models, Relationships>): void {
     if (model.modelName !== this.modelName) {
       throw new TypeError(
@@ -649,12 +715,14 @@ export class Collection<
     }
   }
 
+  /** Create a collection of the same model type. */
   protected clone(
     models: Model<Attributes, Models, Relationships>[],
   ): Collection<Attributes, Models, Relationships> {
     return new Collection(this.modelName, models);
   }
 
+  /** The models of another collection of the same type. */
   protected collectionMembers(
     collection: Collection<Attributes, Models, Relationships>,
   ): Iterable<Model<Attributes, Models, Relationships>> {
@@ -673,8 +741,10 @@ export class PolymorphicCollection<
   PolymorphicCollection<Models, Targets>,
   StoredRecord<object>
 > {
+  /** Label used in error messages. */
   protected readonly description = "polymorphicCollection";
 
+  /** Wrap models of any of the target types in a polymorphic collection. */
   constructor(
     readonly modelNames: Targets,
     models: PolymorphicModelFor<Models, Targets>[],
@@ -683,10 +753,12 @@ export class PolymorphicCollection<
     super(models, saveMembership);
   }
 
+  /** Update attributes shared by every target model on every member. */
   update<Attributes extends PolymorphicUpdateAttributes<Models, Targets>>(
     attributes: Attributes &
       Record<Exclude<keyof Attributes, keyof PolymorphicUpdateAttributes<Models, Targets>>, never>,
   ): this;
+  /** Update one attribute shared by every target model on every member. */
   update<Key extends keyof PolymorphicUpdateAttributes<Models, Targets>>(
     key: Key,
     value: PolymorphicUpdateAttributes<Models, Targets>[Key],
@@ -705,6 +777,7 @@ export class PolymorphicCollection<
     return this.updateAll(attributes);
   }
 
+  /** Throws if the collection accepts different target models. */
   protected assertCollectionCompatible(collection: PolymorphicCollection<Models, Targets>): void {
     if (
       collection.modelNames.length !== this.modelNames.length ||
@@ -718,6 +791,7 @@ export class PolymorphicCollection<
     }
   }
 
+  /** Throws if the model is not one of the target models. */
   protected assertCompatible(model: PolymorphicModelFor<Models, Targets>): void {
     if (!this.modelNames.includes(model.modelName)) {
       throw new TypeError(
@@ -728,12 +802,14 @@ export class PolymorphicCollection<
     }
   }
 
+  /** Create a collection with the same target models. */
   protected clone(
     models: PolymorphicModelFor<Models, Targets>[],
   ): PolymorphicCollection<Models, Targets> {
     return new PolymorphicCollection(this.modelNames, models);
   }
 
+  /** The models of another polymorphic collection. */
   protected collectionMembers(
     collection: PolymorphicCollection<Models, Targets>,
   ): Iterable<PolymorphicModelFor<Models, Targets>> {
@@ -747,6 +823,7 @@ type CreateModelAttributes<
   Relationships extends RelationshipRegistry,
 > = InsertableRecord<Attributes> & RelationshipInputs<Models, Relationships>;
 
+/** The input accepted by `create()` for a model, including relationship values. */
 export type ModelCreateInput<
   Models extends ModelRegistry,
   Name extends keyof Models,
@@ -765,6 +842,7 @@ export class ModelCollection<
   readonly #relationships: Relationships;
   readonly #schema: () => Schema<DatabaseData, Models>;
 
+  /** Create a model collection. Kajo builds these for you through the schema. */
   constructor(
     readonly modelName: string,
     collection: DatabaseCollection<Attributes>,
@@ -778,10 +856,12 @@ export class ModelCollection<
     this.#schema = schema;
   }
 
+  /** All models in the collection. */
   all(): Collection<Attributes, Models, Relationships> {
     return this.#wrapMany([...this.#collection]);
   }
 
+  /** Insert a model and assign its relationships. */
   create(
     input: CreateModelAttributes<Attributes, Models, Relationships>,
   ): Model<Attributes, Models, Relationships> {
@@ -798,6 +878,7 @@ export class ModelCollection<
     return instance;
   }
 
+  /** Build an unsaved model. Call `save()` to insert it. */
   new(
     input: Omit<CreateModelAttributes<Attributes, Models, Relationships>, "id">,
   ): NewModel<Attributes, Models, Relationships> {
@@ -813,7 +894,9 @@ export class ModelCollection<
     );
   }
 
+  /** Find a model by ID, or `null` if none exists. */
   find(id: number | string): Model<Attributes, Models, Relationships> | null;
+  /** Find the models with the given IDs. */
   find(ids: readonly (number | string)[]): Collection<Attributes, Models, Relationships>;
   find(
     ids: number | string | readonly (number | string)[],
@@ -829,11 +912,13 @@ export class ModelCollection<
     return record ? this.#wrap(record) : null;
   }
 
+  /** The first model matching every key in the query, or `null`. */
   findBy(query: RecordQuery<Attributes>): Model<Attributes, Models, Relationships> | null {
     const record = this.#collection.findBy(query);
     return record ? this.#wrap(record) : null;
   }
 
+  /** Find a model matching the query, or create one from the query and extra attributes. */
   findOrCreateBy(
     query: RecordQuery<Attributes>,
     attributes: Partial<CreateModelAttributes<Attributes, Models, Relationships>> = {},
@@ -847,15 +932,18 @@ export class ModelCollection<
     );
   }
 
+  /** The first model in the collection, or `null` if it is empty. */
   first(): Model<Attributes, Models, Relationships> | null {
     const record = this.#collection[0];
     return record ? this.#wrap(record) : null;
   }
 
+  /** An empty collection of this model type. */
   none(): Collection<Attributes, Models, Relationships> {
     return this.#wrapMany([]);
   }
 
+  /** All models matching every key in the query. */
   where(query: RecordQuery<Attributes>): Collection<Attributes, Models, Relationships> {
     return this.#wrapMany(this.#collection.where(query));
   }
@@ -898,6 +986,7 @@ type SchemaCollection<
       : ModelCollection<TableRecord<Tables[Name]>, Models>
     : never;
 
+/** The typed schema API: `db` plus a model collection for every database table. */
 export type Schema<
   Tables extends DatabaseData = DatabaseData,
   Models extends ModelRegistry = {},
@@ -907,6 +996,7 @@ export type Schema<
   readonly [Name in keyof Tables]: SchemaCollection<Tables, Models, Name>;
 };
 
+/** Create a schema over a database, wrapping each table in a model collection. */
 export function createSchema<Tables extends DatabaseData, Models extends ModelRegistry = {}>(
   db: Database<Tables>,
   models: Models = {} as Models,

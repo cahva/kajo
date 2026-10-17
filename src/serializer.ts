@@ -9,39 +9,66 @@ import {
   type RelationshipRegistry,
 } from "./model.ts";
 
+/** Relationships to include, as a list of names or a function of the request and resource. */
 export type IncludeOption =
   | readonly string[]
   | ((request: KajoRequest, resource: SerializableModel) => readonly string[]);
 
+/**
+ * When to add relationship IDs to a payload: always, only for included
+ * relationships, or never.
+ */
 export type SerializeIdsOption = "always" | "included" | "never";
 
+/** Options for a {@linkcode Serializer}. */
 export interface SerializerOptions {
+  /** Attributes to serialize. All attributes are serialized when omitted. */
   readonly attrs?: readonly string[];
+  /** Embed included relationships instead of sideloading them. Defaults to `false`. */
   readonly embed?: boolean;
+  /** Relationships to include in the payload. */
   readonly include?: IncludeOption;
+  /** Wrap the payload in a key named after the model. Defaults to `true`. */
   readonly root?: boolean;
+  /** When to add relationship IDs. Defaults to `"included"`. */
   readonly serializeIds?: SerializeIdsOption;
+  /** Transform an attribute name into a payload key. */
   readonly keyForAttribute?: (attribute: string) => string;
+  /** Return the root key for a collection of this model. Defaults to the plural model key. */
   readonly keyForCollection?: (modelName: string) => string;
+  /** Return the key for an embedded relationship. Defaults to the relationship name. */
   readonly keyForEmbeddedRelationship?: (relationshipName: string) => string;
+  /** Return the key for a belongs-to foreign key. Defaults to `<name>Id`. */
   readonly keyForForeignKey?: (relationshipName: string) => string;
+  /** Return the root key for a single model. Defaults to the model name. */
   readonly keyForModel?: (modelName: string) => string;
+  /** Return the key for an embedded polymorphic record's type. Defaults to `__type`. */
   readonly keyForPolymorphicType?: (relationshipName: string) => string;
+  /** Return the sideload key for records of this model. Defaults to the plural model name. */
   readonly keyForRelationship?: (modelName: string) => string;
+  /** Return the key for has-many relationship IDs. Defaults to `<singular name>Ids`. */
   readonly keyForRelationshipIds?: (relationshipName: string) => string;
 }
 
+/** A model as seen by a serializer. */
 export interface SerializableModel {
+  /** The model's persisted attributes. */
   readonly attrs: Record<string, unknown>;
+  /** The model ID. */
   readonly id: string;
+  /** The model name. */
   readonly modelName: string;
+  /** Internal model metadata. */
   readonly [MODEL_METADATA]: {
     readonly relationships: RelationshipRegistry;
   };
 }
 
+/** Information about the serialization in progress. */
 export interface SerializationContext {
+  /** Relationship names included for the current resource. */
   readonly includedRelationships: ReadonlySet<string>;
+  /** The request being answered. */
   readonly request: KajoRequest;
 }
 
@@ -49,6 +76,7 @@ export interface SerializationContext {
  * Controls how models and collections become JSON response payloads.
  */
 export class Serializer {
+  /** Create a serializer of this class with the given options. */
   static extend<Instance extends Serializer>(
     this: new (options?: SerializerOptions) => Instance,
     options: SerializerOptions = {},
@@ -56,14 +84,20 @@ export class Serializer {
     return new this(options);
   }
 
+  /** Attributes to serialize, or `undefined` for all. */
   readonly attrs: readonly string[] | undefined;
+  /** Whether included relationships are embedded instead of sideloaded. */
   readonly embed: boolean;
+  /** Relationships to include in the payload. */
   readonly include: IncludeOption;
+  /** Whether the payload is wrapped in a key named after the model. */
   readonly root: boolean;
+  /** When relationship IDs are added. */
   readonly serializeIds: SerializeIdsOption;
 
   readonly #options: SerializerOptions;
 
+  /** Create a serializer with the given options. */
   constructor(options: SerializerOptions = {}) {
     this.#options = options;
     this.attrs = options.attrs;
@@ -78,36 +112,44 @@ export class Serializer {
     return new Constructor({ ...this.#options, ...options });
   }
 
+  /** Transform an attribute name into a payload key. */
   keyForAttribute(attribute: string): string {
     return this.#options.keyForAttribute?.(attribute) ?? attribute;
   }
 
+  /** Return the root key for a collection of this model. */
   keyForCollection(modelName: string): string {
     return this.#options.keyForCollection?.(modelName) ?? pluralize(this.keyForModel(modelName));
   }
 
+  /** Return the key for an embedded relationship. */
   keyForEmbeddedRelationship(relationshipName: string): string {
     return this.#options.keyForEmbeddedRelationship?.(relationshipName) ?? relationshipName;
   }
 
+  /** Return the key for a belongs-to foreign key. */
   keyForForeignKey(relationshipName: string): string {
     return this.#options.keyForForeignKey?.(relationshipName) ?? `${relationshipName}Id`;
   }
 
+  /** Return the root key for a single model. */
   keyForModel(modelName: string): string {
     return this.#options.keyForModel?.(modelName) ?? modelName;
   }
 
+  /** Return the key for an embedded polymorphic record's type. */
   keyForPolymorphicType(relationshipName: string): string {
     return (
       this.#options.keyForPolymorphicType?.(relationshipName) ?? this.keyForAttribute("__type")
     );
   }
 
+  /** Return the sideload key for records of this model. */
   keyForRelationship(modelName: string): string {
     return this.#options.keyForRelationship?.(modelName) ?? pluralize(modelName);
   }
 
+  /** Return the key for has-many relationship IDs. */
   keyForRelationshipIds(relationshipName: string): string {
     return (
       this.#options.keyForRelationshipIds?.(relationshipName) ??
@@ -115,6 +157,7 @@ export class Serializer {
     );
   }
 
+  /** Return the relationship names to include for this request and resource. */
   relationshipsToInclude(request: KajoRequest, resource: SerializableModel): readonly string[] {
     return typeof this.include === "function" ? this.include(request, resource) : this.include;
   }
@@ -186,11 +229,13 @@ export class Serializer {
  * Generic REST payloads with roots and relationship IDs serialized by default.
  */
 export class RestSerializer extends Serializer {
+  /** Create a REST serializer. Relationship IDs default to `"always"`. */
   constructor(options: SerializerOptions = {}) {
     super({ serializeIds: "always", ...options });
   }
 }
 
+/** Serializers keyed by model name, with `application` as the fallback. */
 export type SerializerRegistry = Record<string, Serializer | undefined> & {
   readonly application?: Serializer;
 };

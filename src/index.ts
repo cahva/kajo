@@ -4,7 +4,11 @@
  * @module
  */
 
-export type { StandardJSONSchemaV1, StandardSchemaV1 } from "@standard-schema/spec";
+export type {
+  StandardJSONSchemaV1,
+  StandardSchemaV1,
+  StandardTypedV1,
+} from "@standard-schema/spec";
 export { createDatabase, IdentityManager } from "./database.ts";
 export type {
   Database,

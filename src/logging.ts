@@ -1,3 +1,4 @@
+/** Fields shared by every request log entry. */
 export interface RequestLogBase {
   /** The original platform request. */
   readonly request: Request;
@@ -7,7 +8,9 @@ export interface RequestLogBase {
   readonly url: string;
 }
 
+/** A request answered by a Kajo route. */
 export interface HandledRequestLog extends RequestLogBase {
+  /** The entry kind. */
   readonly type: "handled";
   /** Time spent resolving the route and applying its configured delay. */
   readonly durationMs: number;
@@ -23,19 +26,27 @@ export interface HandledRequestLog extends RequestLogBase {
   readonly route: string;
 }
 
+/** A request Kajo let through to the network. */
 export interface PassthroughRequestLog extends RequestLogBase {
+  /** The entry kind. */
   readonly type: "passthrough";
   /** Why Kajo allowed the request to reach the network. */
   readonly reason: "policy" | "rule";
 }
 
+/** A request Kajo owns but no route matched, under the `"error"` unhandled-request policy. */
 export interface UnhandledRequestLog extends RequestLogBase {
+  /** The entry kind. */
   readonly type: "unhandled";
 }
 
+/** A request whose route handler threw an unexpected error. */
 export interface ErroredRequestLog extends RequestLogBase {
+  /** The entry kind. */
   readonly type: "error";
+  /** Time spent before the handler failed. */
   readonly durationMs: number;
+  /** The error the handler threw. */
   readonly error: unknown;
   /** The raw request body. */
   readonly requestBody: string;
@@ -56,8 +67,14 @@ export type RequestLog =
   | PassthroughRequestLog
   | UnhandledRequestLog;
 
+/** A callback that receives every request log entry. */
 export type RequestLogger = (entry: RequestLog) => void;
 
+/**
+ * A {@linkcode RequestLogger} that writes entries to the console. Handled
+ * requests appear as collapsed groups with the request, response, parameters,
+ * and body.
+ */
 export function logRequestToConsole(entry: RequestLog): void {
   if (entry.type === "passthrough") {
     console.debug(

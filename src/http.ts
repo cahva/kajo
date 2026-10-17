@@ -6,8 +6,10 @@ import type { OpenApiRouteContract, OpenApiValidatedRequest } from "./openapi.ts
  * An expected HTTP failure that route handlers can return by throwing.
  */
 export class HttpError extends Error {
+  /** The HTTP status code, from 400 through 599. */
   readonly status: number;
 
+  /** Create an error that Kajo turns into a JSON response with this status and message. */
   constructor(status: number, message: string) {
     if (!Number.isInteger(status) || status < 400 || status > 599) {
       throw new RangeError("HTTP error status must be an integer from 400 through 599.");
@@ -54,6 +56,7 @@ export interface KajoRequest {
  * A value that provides its JSON representation.
  */
 export interface JsonSerializable {
+  /** Return the value to serialize as JSON. */
   toJSON(): unknown;
 }
 
