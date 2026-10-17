@@ -4,11 +4,11 @@
  * TypeScript, or register routes from an OpenAPI 3.1 document, and Kajo
  * intercepts `fetch` and `XMLHttpRequest` traffic in browsers and Node.js.
  *
- * Start with {@linkcode createServer}. Its options configure models,
- * fixtures, factories, serializers, and routes, and the returned
- * {@linkcode Server} handles requests until {@linkcode Server.shutdown} is
- * called. In browsers, routes default to the page's origin; set `urlPrefix` to
- * own another origin, which Node.js always needs.
+ * Start with {@linkcode createServer}. Its options configure models, fixtures,
+ * factories, serializers, and routes, and the returned {@linkcode Server}
+ * handles requests until {@linkcode Server.shutdown} is called. In browsers,
+ * routes default to the page's origin; set `urlPrefix` to own another origin,
+ * which Node.js always needs.
  *
  * ```ts
  * import { createServer, model } from "@cahva/kajo";
@@ -34,11 +34,10 @@
  * server.shutdown();
  * ```
  *
- * ## Models and relationships
- *
- * Declare models with {@linkcode model}, either from a TypeScript type or from
- * any Standard JSON Schema such as Zod, Valibot, or ArkType. Relate them with
- * {@linkcode belongsTo} and {@linkcode hasMany}, and inverses are kept in sync.
+ * **Models and relationships.** Declare models with {@linkcode model}, either
+ * from a TypeScript type or from any Standard JSON Schema such as Zod, Valibot,
+ * or ArkType. Relate them with {@linkcode belongsTo} and {@linkcode hasMany},
+ * and inverses are kept in sync.
  *
  * ```ts
  * import { belongsTo, hasMany, model } from "@cahva/kajo";
@@ -53,10 +52,8 @@
  * };
  * ```
  *
- * ## Factories
- *
- * {@linkcode Factory} builds typed records with sequences, dependent
- * attributes, and {@linkcode trait | traits}.
+ * **Factories.** {@linkcode Factory} builds typed records with sequences,
+ * dependent attributes, and {@linkcode trait | traits}.
  *
  * ```ts
  * import { createServer, Factory, model, trait } from "@cahva/kajo";
@@ -82,12 +79,11 @@
  * });
  * ```
  *
- * ## OpenAPI
- *
- * Pass an OpenAPI 3.1 document as `openapi` to register its operations as
- * example-backed routes. Handlers keyed by `operationId` connect operations to
- * Kajo data, and explicit routes take precedence. Plain JSON Schemas can be
- * validated with the optional `@cahva/kajo/openapi/ajv` entry point.
+ * **OpenAPI.** Pass an OpenAPI 3.1 document as `openapi` to register its
+ * operations as example-backed routes. Handlers keyed by `operationId` connect
+ * operations to Kajo data, and explicit routes take precedence. Plain JSON
+ * Schemas can be validated with the optional `@cahva/kajo/openapi/ajv` entry
+ * point.
  *
  * ```ts
  * import { createServer, model, type OpenApiDocument } from "@cahva/kajo";
