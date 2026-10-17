@@ -9,7 +9,10 @@ import type {
 } from "./types.ts";
 
 export interface AjvOpenApiValidatorOptions {
-  /** Additional Ajv options. Kajo always disables value coercion and mutation. */
+  /**
+   * Additional Ajv options. Kajo always disables value coercion, mutation, and strict
+   * mode, since OpenAPI schemas carry non-JSON-Schema keywords such as `discriminator`.
+   */
   readonly ajv?: Options;
   /** Register ajv-formats. Defaults to true. */
   readonly formats?: boolean;
@@ -25,7 +28,7 @@ export function createAjvOpenApiValidator(
     ...options.ajv,
     allErrors: true,
     coerceTypes: false,
-    strict: options.ajv?.strict ?? false,
+    strict: false,
     useDefaults: false,
   });
 

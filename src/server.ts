@@ -144,7 +144,10 @@ export interface ServerOptions<
   readonly openapi?: OpenApiDocument;
   /** Override imported OpenAPI operations by their operationId. */
   readonly openapiHandlers?: OpenApiHandlerRegistry<Fixtures, Models>;
-  /** Validate plain JSON Schemas in imported and Kajo-defined OpenAPI operations. */
+  /**
+   * Validate plain JSON Schemas in OpenAPI operations. Imported operations are only
+   * validated when this is set; Standard Schema contracts always use their own library.
+   */
   readonly openapiValidator?: OpenApiSchemaValidator;
   /** Initialize additional application data. */
   readonly seeds?: (server: Server<Fixtures, Models>) => void;
@@ -541,7 +544,9 @@ export class Server<
     try {
       try {
         const runtime = (match.route.options as InternalRouteOptions)[OPENAPI_RUNTIME];
-        const contract = match.route.options.openapi ?? runtime?.contract;
+        // Imported operations only validate when an adapter is configured.
+        const contract =
+          match.route.options.openapi ?? (this.#openApiValidator ? runtime?.contract : undefined);
         const validation = contract
           ? await validateOpenApiRequest(contract, routeRequest, {
               document: runtime?.document,

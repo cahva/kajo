@@ -516,6 +516,7 @@ createServer({
 
 The Ajv 2020-12 adapter includes common format validation and lives in a
 separate entry point, so the default Kajo browser bundle does not include Ajv.
+`ajv` and `ajv-formats` are optional peer dependencies; install both to use it.
 Pass a custom `OpenApiSchemaValidator` when another JSON Schema engine or error
 format is preferred. Ajv compiles dynamic schemas with `new Function()`;
 applications with a strict Content Security Policy should provide a

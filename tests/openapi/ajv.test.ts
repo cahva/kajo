@@ -102,4 +102,38 @@ describe("Ajv OpenAPI validator", () => {
       expect.arrayContaining([[], ["category", "label"], ["contact"], ["name"]]),
     );
   });
+
+  test("rejects numeric parameters that are not decimal literals", async () => {
+    const server = createServer({
+      intercept: false,
+      openapi: document,
+      openapiValidator: createAjvOpenApiValidator({ ajv: { strict: true } }),
+    });
+
+    for (const petId of ["0x10", "%207", "Infinity"]) {
+      const response = await server.handle(
+        new Request(`https://example.test/pets/${petId}`, {
+          body: JSON.stringify({ category: { label: "x" }, contact: "a@b.co", name: "x" }),
+          headers: { "content-type": "application/json" },
+          method: "PUT",
+        }),
+      );
+
+      expect(response?.status).toBe(400);
+    }
+  });
+
+  test("keeps generated mock behavior without a validator", async () => {
+    const server = createServer({ intercept: false, openapi: document });
+
+    const response = await server.handle(
+      new Request("https://example.test/pets/0", {
+        body: "not json",
+        headers: { "content-type": "text/plain" },
+        method: "PUT",
+      }),
+    );
+
+    expect(response?.status).toBe(204);
+  });
 });

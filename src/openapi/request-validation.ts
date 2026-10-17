@@ -13,6 +13,7 @@ import type {
   OpenApiMediaType,
   OpenApiDocument,
   OpenApiParameter,
+  OpenApiReference,
   OpenApiRequestBody,
   OpenApiRouteContract,
   OpenApiSchema,
@@ -371,9 +372,12 @@ function decodePrimitive(value: string | undefined, schema: OpenApiSchema | unde
     return undefined;
   }
 
-  if (schemaHasType(schema, "integer") || schemaHasType(schema, "number")) {
-    const number = Number(value);
-    return Number.isNaN(number) ? value : number;
+  // Only decimal literals decode; empty, hex, and padded values stay strings for the schema to reject.
+  if (
+    (schemaHasType(schema, "integer") || schemaHasType(schema, "number")) &&
+    /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(value)
+  ) {
+    return Number(value);
   }
 
   if (schemaHasType(schema, "boolean")) {
@@ -416,7 +420,7 @@ function requestCookie(header: string | null, name: string): string | undefined 
 }
 
 function resolveObject<Value extends object>(
-  value: Value | import("./types.ts").OpenApiReference,
+  value: Value | OpenApiReference,
   references: LocalReferenceResolver | undefined,
   location: string,
 ): Value {
