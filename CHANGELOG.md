@@ -8,6 +8,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-17
+
+### Added
+
+- Documentation for every exported symbol, so the JSR docs cover the whole
+  API.
+- A `StandardTypedV1` type re-export, the base of the re-exported Standard
+  Schema types.
+
+### Changed
+
+- A package description that says what Kajo does.
+
 ## [0.1.0] - 2026-10-17
 
 First public release.
@@ -50,5 +63,6 @@ First public release.
 - Task-board and OpenAPI-first Petstore browser examples, and a Mirage JS
   compatibility matrix.
 
-[Unreleased]: https://github.com/cahva/kajo/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/cahva/kajo/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/cahva/kajo/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/cahva/kajo/releases/tag/v0.1.0
