@@ -129,12 +129,9 @@ not as a list of fixes to port.
 
 ## Remaining work
 
-The Mirage-style core is implemented and tested. The remaining work is the
-OpenAPI contract layer and the first release:
-
-1. Add an optional JSON Schema validator adapter, model-backed `resource()`
-   contract generation, and external `$ref` resolution.
-2. Publish the first release.
+The Mirage-style core is implemented and tested. The remaining work is in the
+OpenAPI contract layer: model-backed `resource()` contract generation and
+external `$ref` resolution.
 
 OpenAPI documents can register deterministic example-backed routes, generate
 response bodies from JSON Schemas, resolve local JSON Pointers, connect

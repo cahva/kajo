@@ -1,3 +1,20 @@
+/**
+ * Optional Ajv 2020-12 validator for plain JSON Schemas in imported OpenAPI
+ * documents. Requires the `ajv` and `ajv-formats` packages.
+ *
+ * ```ts
+ * import { createServer } from "@cahva/kajo";
+ * import { createAjvOpenApiValidator } from "@cahva/kajo/openapi/ajv";
+ *
+ * const server = createServer({
+ *   openapi: document,
+ *   openapiValidator: createAjvOpenApiValidator(),
+ * });
+ * ```
+ *
+ * @module
+ */
+
 import { Ajv2020, type ErrorObject, type Options, type ValidateFunction } from "ajv/dist/2020.js";
 import formatsPlugin from "ajv-formats";
 import type {
