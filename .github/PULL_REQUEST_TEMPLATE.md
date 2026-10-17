@@ -9,3 +9,8 @@
 ## Testing
 
 <!-- How the changes were verified: test runs, manual checks. -->
+
+## Changelog
+
+<!-- For user-facing changes, add an entry under `## [Unreleased]` in
+     CHANGELOG.md (Added, Changed, Fixed, or Removed). Write "None" otherwise. -->
