@@ -58,18 +58,7 @@ Kajo can register typed route handlers and intercept requests made with Fetch
 or XMLHttpRequest:
 
 ```ts
-import {
-  belongsTo,
-  createServer,
-  Factory,
-  hasMany,
-  HttpError,
-  model,
-  association,
-  RestSerializer,
-  Serializer,
-  trait,
-} from "@cahva/kajo";
+import { createServer, model } from "@cahva/kajo";
 
 interface Movie {
   title: string;
@@ -557,8 +546,8 @@ their own library regardless of this option.
 
 Kajo's compatibility suite compiles all 20 operations in ReadMe's unmodified
 OpenAPI 3.1 Petstore document. Documents with a `servers` base currently pass
-that URL through `urlPrefix`; automatic server selection, security enforcement,
-and imported JSON Schema validation remain future work. Operations without a
+that URL through `urlPrefix`; automatic server selection and security
+enforcement remain future work. Operations without a
 `2xx` response use their lowest documented concrete status as the generated
 fallback, while an `operationId` handler can provide application behavior.
 
@@ -576,10 +565,10 @@ Unconstrained schemas produce `{}`, and recursive schemas require an explicit
 example.
 
 The OpenAPI integration supports inline examples, locally referenced examples,
-schema-generated values, operation handlers, route-contract export, and
-Standard Schema request validation. Local JSON Pointer references can target
-path items, responses, examples, and schemas. External `$ref` resolution and
-validation of imported plain JSON Schemas are planned next.
+schema-generated values, operation handlers, route-contract export, Standard
+Schema request validation, and imported JSON Schema validation through an
+adapter. Local JSON Pointer references can target path items, responses,
+examples, and schemas. External `$ref` resolution is planned next.
 
 Kajo owns same-origin routes by default in browsers. Set `urlPrefix` for an
 external API; requests outside that origin and namespace are ignored

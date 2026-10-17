@@ -37,9 +37,9 @@ Kajo publishes to JSR as `@cahva/kajo` from `.github/workflows/release.yml`.
 2. Merge it to `main`.
 3. Tag the merge commit with a signed annotated tag and push it:
    `git tag -s vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.
-4. The workflow refuses unsigned or lightweight tags, tags not contained in
-   `main`, and versions that do not match both manifests. It then runs CI,
-   publishes to JSR over OIDC, and creates the GitHub release with the
-   changelog section as notes.
+4. The workflow runs CI and the tag checks side by side. The checks refuse
+   unsigned or lightweight tags, tags not contained in `main`, and versions
+   that do not match both manifests. When both pass, it publishes to JSR over
+   OIDC and creates the GitHub release with the changelog section as notes.
 
 Never publish from a local machine; JSR versions cannot be replaced.

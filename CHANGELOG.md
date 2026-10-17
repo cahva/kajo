@@ -12,6 +12,12 @@ and this project adheres to
 
 - An overview with examples on the main entry point's JSR docs page.
 
+### Fixed
+
+- The README and module overview quick starts now run in Node.js, which needs a
+  `urlPrefix` and absolute request URLs.
+- The README no longer lists imported JSON Schema validation as future work.
+
 ## [0.1.3] - 2026-10-17
 
 ### Changed
