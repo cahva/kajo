@@ -7,12 +7,14 @@
  * Start with {@linkcode createServer}. Its options configure models,
  * fixtures, factories, serializers, and routes, and the returned
  * {@linkcode Server} handles requests until {@linkcode Server.shutdown} is
- * called.
+ * called. In browsers, routes default to the page's origin; set `urlPrefix` to
+ * own another origin, which Node.js always needs.
  *
  * ```ts
  * import { createServer, model } from "@cahva/kajo";
  *
  * const server = createServer({
+ *   urlPrefix: "https://api.example.test",
  *   models: {
  *     movie: model<{ title: string }>(),
  *   },
@@ -26,7 +28,7 @@
  *   },
  * });
  *
- * const response = await fetch("/api/movies/1");
+ * const response = await fetch("https://api.example.test/api/movies/1");
  * await response.json(); // { movie: { id: "1", title: "Arrival" } }
  *
  * server.shutdown();
