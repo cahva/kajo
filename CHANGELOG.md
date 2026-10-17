@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- The Document Navigation list on the main JSR docs page, which went empty in
+  0.1.4 when the module overview gained section headings.
+
 ## [0.1.4] - 2026-10-17
 
 ### Added
