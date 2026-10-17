@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-17
+
 ### Fixed
 
 - The README's examples link, which pointed at a folder JSR does not
@@ -68,6 +70,7 @@ First public release.
 - Task-board and OpenAPI-first Petstore browser examples, and a Mirage JS
   compatibility matrix.
 
-[Unreleased]: https://github.com/cahva/kajo/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/cahva/kajo/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/cahva/kajo/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/cahva/kajo/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/cahva/kajo/releases/tag/v0.1.0
