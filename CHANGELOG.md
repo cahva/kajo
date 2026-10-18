@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-18
+
 ### Added
 
 - WebSocket routes. `this.websocket(path, handler)` intercepts matching
@@ -106,7 +108,8 @@ First public release.
 - Task-board and OpenAPI-first Petstore browser examples, and a Mirage JS
   compatibility matrix.
 
-[Unreleased]: https://github.com/cahva/kajo/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/cahva/kajo/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/cahva/kajo/compare/v0.1.5...v0.2.0
 [0.1.5]: https://github.com/cahva/kajo/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/cahva/kajo/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/cahva/kajo/compare/v0.1.2...v0.1.3
