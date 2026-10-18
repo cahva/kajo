@@ -94,6 +94,58 @@ describe("websocket routes", () => {
     await expect(message).resolves.toBe("update");
   });
 
+  test("closes the client with 1011 when an async handler rejects", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const server = createServer({
+      routes() {
+        this.websocket("/boom", async () => {
+          await Promise.resolve();
+          throw new Error("boom");
+        });
+      },
+      urlPrefix: "http://api.example.test",
+    });
+    kajoServers.push(server);
+
+    const socket = new WebSocket("ws://api.example.test/boom");
+    const closed = new Promise<CloseEvent>((resolve) =>
+      socket.addEventListener("close", (event) => resolve(event)),
+    );
+
+    await expect(closed).resolves.toMatchObject({ code: 1011 });
+    expect(error).toHaveBeenCalledWith(
+      '[Kajo] WebSocket handler for "/boom" failed.',
+      expect.any(Error),
+    );
+    error.mockRestore();
+  });
+
+  test("stops delivering client messages to a removed listener", async () => {
+    const server = createServer({
+      routes() {
+        this.websocket("/once", (client) => {
+          const reply = () => {
+            client.send("first");
+            client.removeEventListener("message", reply);
+            client.addEventListener("message", () => client.send("later"));
+          };
+          client.addEventListener("message", reply);
+        });
+      },
+      urlPrefix: "http://api.example.test",
+    });
+    kajoServers.push(server);
+
+    const socket = new WebSocket("ws://api.example.test/once");
+    await opened(socket);
+    const first = nextMessage(socket);
+    socket.send("a");
+    await expect(first).resolves.toBe("first");
+    const second = nextMessage(socket);
+    socket.send("b");
+    await expect(second).resolves.toBe("later");
+  });
+
   test("closes the client with 1011 when the handler throws", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const server = createServer({

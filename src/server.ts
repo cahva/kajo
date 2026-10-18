@@ -740,11 +740,21 @@ export class Server<
       this.#socketClients.delete(client);
     });
 
-    try {
-      entry.handler(client, { params: match.params, schema: this.schema as never, server, url });
-    } catch (error) {
+    const fail = (error: unknown) => {
       console.error(`[Kajo] WebSocket handler for "${entry.path}" failed.`, error);
       client.close(1011, "Internal error");
+    };
+
+    try {
+      const result = entry.handler(client, {
+        params: match.params,
+        schema: this.schema as never,
+        server,
+        url,
+      });
+      Promise.resolve(result).catch(fail);
+    } catch (error) {
+      fail(error);
     }
   }
 

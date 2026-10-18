@@ -706,15 +706,23 @@ matches the route. `ws:` and `wss:` URLs match routes on the `http:` and
 no route reach the network.
 
 ```ts
+import { createServer, model, type WebSocketRoute } from "@cahva/kajo";
+
 let rooms: WebSocketRoute | undefined;
 
 createServer({
   urlPrefix: "https://api.example.test",
+  models: {
+    room: model<{ name: string }>(),
+  },
   routes() {
     rooms = this.websocket("/rooms/:id", (client, { params, schema }) => {
       client.send(JSON.stringify(schema.rooms.find(params.id)));
       client.addEventListener("message", (event) => client.send(event.data));
     });
+  },
+  seeds(server) {
+    server.schema.rooms.create({ name: "Lobby" });
   },
 });
 
@@ -724,7 +732,8 @@ rooms?.broadcast("refresh");
 `websocket()` returns a handle whose `broadcast(data)` sends to every open
 client on that route. The handler also gets `server`, the real connection.
 Call `server.connect()` to forward a matched connection to the network. If a
-handler throws, Kajo logs the error and closes the client with code `1011`.
+handler throws or its promise rejects, Kajo logs the error and closes the
+client with code `1011`.
 `shutdown()` closes every mocked client.
 
 Interception works by replacing `globalThis.WebSocket` when the first

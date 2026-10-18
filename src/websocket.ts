@@ -38,6 +38,10 @@ export interface WebSocketClient {
   addEventListener(type: "message", listener: (event: WebSocketMessageEvent) => void): void;
   /** Listen for the connection closing. */
   addEventListener(type: "close", listener: (event: WebSocketCloseEvent) => void): void;
+  /** Stop listening for client messages. */
+  removeEventListener(type: "message", listener: (event: WebSocketMessageEvent) => void): void;
+  /** Stop listening for the connection closing. */
+  removeEventListener(type: "close", listener: (event: WebSocketCloseEvent) => void): void;
 }
 
 /**
@@ -62,6 +66,14 @@ export interface WebSocketServer {
   addEventListener(type: "close", listener: (event: WebSocketCloseEvent) => void): void;
   /** Listen for real connection errors. */
   addEventListener(type: "error", listener: () => void): void;
+  /** Stop listening for the real connection opening. */
+  removeEventListener(type: "open", listener: () => void): void;
+  /** Stop listening for messages from the real server. */
+  removeEventListener(type: "message", listener: (event: WebSocketMessageEvent) => void): void;
+  /** Stop listening for the real connection closing. */
+  removeEventListener(type: "close", listener: (event: WebSocketCloseEvent) => void): void;
+  /** Stop listening for real connection errors. */
+  removeEventListener(type: "error", listener: () => void): void;
 }
 
 /** Information about an intercepted WebSocket connection. */
@@ -82,12 +94,12 @@ export interface WebSocketRouteContext<Schema = unknown> {
 /**
  * Handle one intercepted WebSocket connection. Use `client.send()` to push
  * data and `client.addEventListener("message", ...)` to read what the client
- * sends.
+ * sends. The handler may be async; a rejection is handled like a throw.
  */
 export type WebSocketHandler<Schema = unknown> = (
   client: WebSocketClient,
   context: WebSocketRouteContext<Schema>,
-) => void;
+) => void | Promise<void>;
 
 /** A registered WebSocket route, returned by `websocket()`. */
 export interface WebSocketRoute {
