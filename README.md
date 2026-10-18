@@ -698,6 +698,41 @@ const post = server.create("post");
 const postByAda = server.create("post", { author: ada });
 ```
 
+### WebSockets
+
+`this.websocket(path, handler)` intercepts `WebSocket` connections whose URL
+matches the route. `ws:` and `wss:` URLs match routes on the `http:` and
+`https:` origins, so the same `urlPrefix` covers both. Connections that match
+no route reach the network.
+
+```ts
+let rooms: WebSocketRoute | undefined;
+
+createServer({
+  urlPrefix: "https://api.example.test",
+  routes() {
+    rooms = this.websocket("/rooms/:id", (client, { params, schema }) => {
+      client.send(JSON.stringify(schema.rooms.find(params.id)));
+      client.addEventListener("message", (event) => client.send(event.data));
+    });
+  },
+});
+
+rooms?.broadcast("refresh");
+```
+
+`websocket()` returns a handle whose `broadcast(data)` sends to every open
+client on that route. The handler also gets `server`, the real connection.
+Call `server.connect()` to forward a matched connection to the network. If a
+handler throws, Kajo logs the error and closes the client with code `1011`.
+`shutdown()` closes every mocked client.
+
+Interception works by replacing `globalThis.WebSocket` when the first
+WebSocket route is registered. Libraries that copy the constructor when their
+module loads, such as `engine.io-client` (and so `socket.io-client`), must be
+imported after the server is created. In an app, start Kajo first and then
+load the rest with a dynamic `import()`.
+
 ## Principles
 
 - **TypeScript first.** Runtime definitions should be the source of static

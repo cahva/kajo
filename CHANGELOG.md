@@ -8,6 +8,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- WebSocket routes. `this.websocket(path, handler)` intercepts matching
+  `WebSocket` connections and hands the client to `handler`, along with path
+  params, the schema, and the real server connection for passthrough. It
+  returns a handle whose `broadcast(data)` pushes to every open client on the
+  route. Unmatched connections reach the network, a throwing handler closes
+  its client with code `1011`, and `shutdown()` closes mocked clients.
+
 ## [0.1.5] - 2026-10-17
 
 ### Fixed
