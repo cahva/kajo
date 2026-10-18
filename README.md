@@ -47,11 +47,9 @@ deno add --dev jsr:@cahva/kajo
 ```
 
 The optional [Ajv adapter](#openapi) for validating imported OpenAPI schemas
-needs `ajv` and `ajv-formats` as well:
-
-```bash
-npm install -D ajv ajv-formats
-```
+uses `ajv` and `ajv-formats`. JSR has no optional or peer dependencies, so
+installing Kajo from JSR always installs both, about 1.3 MB. They only reach an
+app's bundle when it imports `@cahva/kajo/openapi/ajv`.
 
 ## Current API
 
@@ -535,7 +533,8 @@ createServer({
 
 The Ajv 2020-12 adapter includes common format validation and lives in a
 separate entry point, so the default Kajo browser bundle does not include Ajv.
-`ajv` and `ajv-formats` are optional peer dependencies; install both to use it.
+Installing Kajo from JSR includes `ajv` and `ajv-formats`, so the adapter needs
+no extra packages.
 Pass a custom `OpenApiSchemaValidator` when another JSON Schema engine or error
 format is preferred. Ajv compiles dynamic schemas with `new Function()`;
 applications with a strict Content Security Policy should provide a
