@@ -61,11 +61,24 @@ import {
   type ShorthandOptions,
   type ShorthandMethod,
 } from "./shorthand.ts";
+import {
+  httpUrl,
+  interceptWebSockets,
+  type WebSocketClient,
+  type WebSocketConnection,
+  type WebSocketHandler,
+  type WebSocketRoute,
+} from "./websocket.ts";
 
 const HTTP_METHODS = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "TRACE"] as const;
 const OPENAPI_RUNTIME: unique symbol = Symbol("kajo.openapi.runtime");
 
 type HttpMethod = (typeof HTTP_METHODS)[number];
+interface SocketRouteEntry {
+  readonly clients: Set<WebSocketClient>;
+  readonly handler: WebSocketHandler<never>;
+  readonly path: string;
+}
 type InternalRouteOptions = GetRouteOptions & {
   readonly [OPENAPI_RUNTIME]?: {
     readonly contract: OpenApiRouteContract;
@@ -191,6 +204,11 @@ export class Server<
   readonly #trackRequests: boolean;
   readonly #unhandledRequest: UnhandledRequestPolicy;
   #interceptor: NetworkInterceptor | undefined;
+  readonly #intercept: boolean;
+  // Reuses the HTTP router for path matching; responders here are socket route entries.
+  readonly #socketRouter = new Router();
+  readonly #socketClients = new Set<WebSocketClient>();
+  #socketInterceptor: NetworkInterceptor | undefined;
   #isRunning = true;
 
   /** A path prepended to routes registered after it is set. */
@@ -268,7 +286,9 @@ export class Server<
 
     this.schema = createSchema(this.db, options.models);
 
-    if (options.intercept !== false) {
+    this.#intercept = options.intercept !== false;
+
+    if (this.#intercept) {
       this.#interceptor = interceptRequests((request) => this.#handleIntercepted(request));
     }
   }
@@ -658,7 +678,84 @@ export class Server<
   shutdown(): void {
     this.#interceptor?.dispose();
     this.#interceptor = undefined;
+    this.#socketInterceptor?.dispose();
+    this.#socketInterceptor = undefined;
+
+    for (const client of this.#socketClients) {
+      client.close();
+    }
+
+    this.#socketClients.clear();
     this.#isRunning = false;
+  }
+
+  /**
+   * Register a WebSocket route and return a handle for broadcasting to its
+   * clients. Connections to a matching URL are handed to `handler` instead of
+   * the network; unmatched connections pass through. `ws:` and `wss:` URLs
+   * match routes on the `http:` and `https:` origins.
+   */
+  websocket(
+    path: string,
+    handler: WebSocketHandler<Schema<ServerTables<Fixtures, Models>, Models>>,
+  ): WebSocketRoute {
+    const address = this.#boundary.resolve(this.urlPrefix, this.namespace, path);
+    const origin = address.origin === undefined ? undefined : httpUrl(address.origin).origin;
+    const entry: SocketRouteEntry = {
+      clients: new Set(),
+      handler: handler as WebSocketHandler<never>,
+      path: address.path,
+    };
+
+    this.#socketRouter.add("GET", address.path, entry as unknown as RouteResponder, {}, origin);
+
+    if (this.#intercept && !this.#socketInterceptor) {
+      this.#socketInterceptor = interceptWebSockets((connection) =>
+        this.#handleWebSocket(connection),
+      );
+    }
+
+    return {
+      broadcast(data) {
+        for (const client of entry.clients) {
+          client.send(data);
+        }
+      },
+    };
+  }
+
+  #handleWebSocket({ client, server, url }: WebSocketConnection): void {
+    const match = this.#isRunning ? this.#socketRouter.match("GET", url) : undefined;
+
+    if (!match) {
+      server.connect();
+      return;
+    }
+
+    const entry = match.route.responder as unknown as SocketRouteEntry;
+    entry.clients.add(client);
+    this.#socketClients.add(client);
+    client.addEventListener("close", () => {
+      entry.clients.delete(client);
+      this.#socketClients.delete(client);
+    });
+
+    const fail = (error: unknown) => {
+      console.error(`[Kajo] WebSocket handler for "${entry.path}" failed.`, error);
+      client.close(1011, "Internal error");
+    };
+
+    try {
+      const result = entry.handler(client, {
+        params: match.params,
+        schema: this.schema as never,
+        server,
+        url,
+      });
+      Promise.resolve(result).catch(fail);
+    } catch (error) {
+      fail(error);
+    }
   }
 
   /** Remove all retained request history without changing route configuration. */

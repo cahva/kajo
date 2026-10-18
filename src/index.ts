@@ -182,6 +182,16 @@ export type {
   Schema,
   Singularize,
 } from "./model.ts";
+export type {
+  WebSocketClient,
+  WebSocketCloseEvent,
+  WebSocketData,
+  WebSocketHandler,
+  WebSocketMessageEvent,
+  WebSocketRoute,
+  WebSocketRouteContext,
+  WebSocketServer,
+} from "./websocket.ts";
 export { logRequestToConsole } from "./logging.ts";
 export type {
   ErroredRequestLog,
