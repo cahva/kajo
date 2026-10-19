@@ -9,8 +9,8 @@
 Kajo is a fully typed, in-memory API simulator for building and testing
 applications without a backend. Define routes, models, factories, and
 serializers in TypeScript, or register routes straight from an OpenAPI 3.1
-document, and Kajo intercepts Fetch and XMLHttpRequest traffic in browsers and
-modern runtimes.
+document, and Kajo intercepts Fetch, XMLHttpRequest, and WebSocket traffic in
+browsers and modern runtimes.
 
 Kajo is Finnish for a faint glow or reflected light, often seen on the horizon:
 something visible, but not quite tangible.

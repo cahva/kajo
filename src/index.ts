@@ -2,7 +2,8 @@
  * A fully typed, in-memory API simulator for building and testing applications
  * without a backend. Define routes, models, factories, and serializers in
  * TypeScript, or register routes from an OpenAPI 3.1 document, and Kajo
- * intercepts `fetch` and `XMLHttpRequest` traffic in browsers and Node.js.
+ * intercepts `fetch`, `XMLHttpRequest`, and `WebSocket` traffic in browsers and
+ * Node.js.
  *
  * Start with {@linkcode createServer}. Its options configure models, fixtures,
  * factories, serializers, and routes, and the returned {@linkcode Server}
