@@ -8,6 +8,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-19
+
+### Changed
+
+- The README explains that installing from JSR always includes `ajv` and
+  `ajv-formats`, mentions WebSocket interception, and links planned features to
+  their issues instead of describing them as future work.
+
 ### Fixed
 
 - The `model()` docs no longer claim that a model's Standard Schema validates
@@ -113,7 +121,8 @@ First public release.
 - Task-board and OpenAPI-first Petstore browser examples, and a Mirage JS
   compatibility matrix.
 
-[Unreleased]: https://github.com/cahva/kajo/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/cahva/kajo/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/cahva/kajo/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/cahva/kajo/compare/v0.1.5...v0.2.0
 [0.1.5]: https://github.com/cahva/kajo/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/cahva/kajo/compare/v0.1.3...v0.1.4
