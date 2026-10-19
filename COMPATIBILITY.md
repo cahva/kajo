@@ -129,9 +129,9 @@ not as a list of fixes to port.
 
 ## Remaining work
 
-The Mirage-style core is implemented and tested. The remaining work is in the
-OpenAPI contract layer: model-backed `resource()` contract generation and
-external `$ref` resolution.
+The Mirage-style core is implemented and tested. Remaining work is tracked as
+enhancement issues, including model-backed contract generation
+([#25](https://github.com/cahva/kajo/issues/25)) and external `$ref` resolution ([#26](https://github.com/cahva/kajo/issues/26)).
 
 OpenAPI documents can register deterministic example-backed routes, generate
 response bodies from JSON Schemas, resolve local JSON Pointers, connect

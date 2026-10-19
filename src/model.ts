@@ -137,7 +137,7 @@ export interface ModelDefinition<
 > {
   /** Relationship declarations added with `extend()`. */
   readonly relationships: Relationships;
-  /** The Standard Schema that validates attributes, or `undefined` for a type-only model. */
+  /** The Standard Schema the attribute type is inferred from, or `undefined` for a type-only model. */
   readonly schema: AttributeSchema;
   /** Type-only marker carrying the attribute type. Never set at runtime. */
   readonly [modelAttributes]?: Attributes;
@@ -199,7 +199,11 @@ export function model<Attributes extends object = object>(): ModelDefinition<
   {},
   undefined
 >;
-/** Define a model whose attribute type is inferred from a Standard Schema, which also validates attributes at runtime. */
+/**
+ * Define a model whose attribute type is inferred from a Standard Schema. The
+ * schema is kept on the definition; Kajo does not validate stored attributes
+ * against it.
+ */
 export function model<AttributeSchema extends KajoSchema<unknown, object>>(
   schema: AttributeSchema,
 ): ModelDefinition<InferSchemaOutput<AttributeSchema>, {}, AttributeSchema>;
