@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- The `model()` docs no longer claim that a model's Standard Schema validates
+  attributes at runtime. It only provides the attribute type.
+
 ## [0.2.0] - 2026-10-18
 
 ### Added

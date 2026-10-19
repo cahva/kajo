@@ -32,7 +32,8 @@ shorthand helpers. If you are coming from
 On top of that core, Kajo can register routes directly from an OpenAPI 3.1
 document, so a project with a spec does not have to define the same endpoints
 twice. Imported request schemas can be validated through an optional Ajv
-adapter; external `$ref` resolution is the next step.
+adapter. Planned work is tracked in
+[enhancement issues](https://github.com/cahva/kajo/issues?q=is%3Aissue+is%3Aopen+label%3Aenhancement).
 
 ## Installation
 
@@ -217,8 +218,11 @@ const models = {
 };
 ```
 
-The schema remains available on the model definition for validation and future
-OpenAPI generation. Zod, ArkType, Valibot's Standard JSON Schema adapter, and
+The schema types the model's attributes and stays available on the model
+definition, so the same schema object can be reused in route contracts for
+request validation and OpenAPI export. Kajo does not validate stored model
+attributes against it ([#28](https://github.com/cahva/kajo/issues/28)), and model schemas do not generate OpenAPI
+contracts on their own ([#25](https://github.com/cahva/kajo/issues/25)). Zod, ArkType, Valibot's Standard JSON Schema adapter, and
 other compatible implementations use the same Kajo API. The existing
 `model<Task>()` form remains available when runtime schema metadata is not
 needed.
@@ -545,9 +549,12 @@ behavior. Kajo-authored Standard Schema contracts continue validating through
 their own library regardless of this option.
 
 Kajo's compatibility suite compiles all 20 operations in ReadMe's unmodified
-OpenAPI 3.1 Petstore document. Documents with a `servers` base currently pass
-that URL through `urlPrefix`; automatic server selection and security
-enforcement remain future work. Operations without a
+OpenAPI 3.1 Petstore document. Kajo does not read or select a server from a
+document's `servers`
+([#27](https://github.com/cahva/kajo/issues/27)); imported routes use the
+`urlPrefix` you configure, so set it to the server URL the app calls, for
+example `urlPrefix: document.servers[0].url`. Security requirements are not
+enforced. Operations without a
 `2xx` response use their lowest documented concrete status as the generated
 fallback, while an `operationId` handler can provide application behavior.
 
@@ -568,7 +575,8 @@ The OpenAPI integration supports inline examples, locally referenced examples,
 schema-generated values, operation handlers, route-contract export, Standard
 Schema request validation, and imported JSON Schema validation through an
 adapter. Local JSON Pointer references can target path items, responses,
-examples, and schemas. External `$ref` resolution is planned next.
+examples, and schemas. External `$ref`s to other files or URLs are not resolved
+([#26](https://github.com/cahva/kajo/issues/26)).
 
 Kajo owns same-origin routes by default in browsers. Set `urlPrefix` for an
 external API; requests outside that origin and namespace are ignored
