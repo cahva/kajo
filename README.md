@@ -549,9 +549,12 @@ behavior. Kajo-authored Standard Schema contracts continue validating through
 their own library regardless of this option.
 
 Kajo's compatibility suite compiles all 20 operations in ReadMe's unmodified
-OpenAPI 3.1 Petstore document. Documents with a `servers` base pass that URL
-through `urlPrefix`, because Kajo does not select a server from the document
-([#27](https://github.com/cahva/kajo/issues/27)). Security requirements are not enforced. Operations without a
+OpenAPI 3.1 Petstore document. Kajo does not read or select a server from a
+document's `servers`
+([#27](https://github.com/cahva/kajo/issues/27)); imported routes use the
+`urlPrefix` you configure, so set it to the server URL the app calls, for
+example `urlPrefix: document.servers[0].url`. Security requirements are not
+enforced. Operations without a
 `2xx` response use their lowest documented concrete status as the generated
 fallback, while an `operationId` handler can provide application behavior.
 
